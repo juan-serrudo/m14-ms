@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   # Microservicio Users - Réplica 1
+  # NOTA: Comparte el mismo volumen (users-db) con users-service-2
+  # para que ambas réplicas vean la misma base de datos SQLite
   users-service-1:
     build:
       context: ./microservices/users
@@ -16,17 +18,19 @@ services:
       - ENV_SWAGGER_SHOW=false
       - DATABASE_PATH=/app/data/users.sqlite
     volumes:
-      - users-db-1:/app/data
+      - users-db:/app/data
     networks:
       - microservices-network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/users', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
   # Microservicio Users - Réplica 2
+  # NOTA: Comparte el mismo volumen (users-db) con users-service-1
+  # para que ambas réplicas vean la misma base de datos SQLite
   users-service-2:
     build:
       context: ./microservices/users
@@ -41,11 +45,11 @@ services:
       - ENV_SWAGGER_SHOW=false
       - DATABASE_PATH=/app/data/users.sqlite
     volumes:
-      - users-db-2:/app/data
+      - users-db:/app/data
     networks:
       - microservices-network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/users', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -65,13 +69,16 @@ services:
     networks:
       - microservices-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
   # Microservicio Password
+  # NOTA: Usa un único volumen (password-db) para la base de datos SQLite.
+  # Si en el futuro se añaden réplicas de password-service, todas deben
+  # montar el mismo volumen password-db para compartir la misma BD.
   password-service:
     build:
       context: ./microservices/password
@@ -93,7 +100,7 @@ services:
     networks:
       - microservices-network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/password-manager', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -118,10 +125,13 @@ networks:
     driver: bridge
 
 volumes:
-  users-db-1:
+  # Volumen compartido para ambas réplicas de users-service
+  # Ambas réplicas (users-service-1 y users-service-2) montan este volumen
+  # en /app/data para compartir la misma base de datos SQLite (users.sqlite)
+  users-db:
     driver: local
-  users-db-2:
-    driver: local
+  # Volumen único para password-service
+  # Si se añaden réplicas en el futuro, todas deben montar este mismo volumen
   password-db:
     driver: local
 

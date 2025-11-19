@@ -101,6 +101,39 @@
         .info li {
             margin: 5px 0;
         }
+        .api-status {
+            background: #f0f0f0;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .api-status h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .api-status-message {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .api-status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .api-status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .api-status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
     </style>
 </head>
 <body>
@@ -126,6 +159,13 @@
             </div>
         </div>
         
+        <div class="api-status">
+            <h3>🔌 Estado de Conexión con Microservicios</h3>
+            <div id="api-status-message" class="api-status-message info">
+                Verificando conectividad con los microservicios...
+            </div>
+        </div>
+        
         <div class="info">
             <h3>📋 Características Implementadas</h3>
             <ul>
@@ -141,37 +181,182 @@
     </div>
     
     <script>
-        // Verificar estado de los servicios
+        // Verificar estado de los servicios desde el frontend
         async function checkService(url, statusElement, serviceName) {
             try {
                 const response = await fetch(url, {
                     method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors'
                 });
                 if (response.ok) {
+                    const data = await response.json();
                     statusElement.textContent = '✅ En línea';
                     statusElement.className = 'status running';
+                    return true;
                 } else {
                     statusElement.textContent = '⚠️ Error ' + response.status;
                     statusElement.className = 'status error';
+                    return false;
                 }
             } catch (error) {
                 statusElement.textContent = '❌ No disponible';
                 statusElement.className = 'status error';
+                console.error(`Error verificando ${serviceName}:`, error);
+                return false;
             }
         }
         
-        // Verificar servicios (desde el navegador, solo si están accesibles)
-        // Nota: En producción, estos servicios estarían detrás de un proxy
-        // Por ahora solo mostramos la información
+        // Actualizar mensaje de estado de API
+        function updateApiStatusMessage(message, type) {
+            const statusMessage = document.getElementById('api-status-message');
+            statusMessage.textContent = message;
+            statusMessage.className = `api-status-message ${type}`;
+        }
         
-        // Simular verificación después de un delay
-        setTimeout(() => {
-            document.getElementById('users-status').textContent = 'ℹ️ Verificar desde el backend';
-            document.getElementById('users-status').className = 'status checking';
-            document.getElementById('password-status').textContent = 'ℹ️ Verificar desde el backend';
-            document.getElementById('password-status').className = 'status checking';
-        }, 1000);
+        // Verificar Password Service desde el frontend
+        async function checkPasswordService() {
+            const statusElement = document.getElementById('password-status');
+            statusElement.textContent = '🔄 Verificando...';
+            statusElement.className = 'status checking';
+            
+            try {
+                // Intentar hacer fetch al endpoint de password-manager
+                const response = await fetch('http://localhost:3000/api/password-manager', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    statusElement.textContent = '✅ En línea - API funcionando correctamente';
+                    statusElement.className = 'status running';
+                    
+                    // Mostrar información adicional si hay datos
+                    if (data.response && Array.isArray(data.response)) {
+                        updateApiStatusMessage(
+                            `✅ Password Service: Conectado correctamente. ${data.response.length} contraseñas encontradas.`,
+                            'success'
+                        );
+                        console.log(`Password Service: ${data.response.length} contraseñas encontradas`);
+                    } else {
+                        updateApiStatusMessage(
+                            '✅ Password Service: Conectado correctamente. API respondiendo.',
+                            'success'
+                        );
+                    }
+                } else {
+                    statusElement.textContent = `⚠️ Respuesta: ${response.status} ${response.statusText}`;
+                    statusElement.className = 'status error';
+                    updateApiStatusMessage(
+                        `⚠️ Password Service: Error ${response.status} - ${response.statusText}`,
+                        'error'
+                    );
+                }
+            } catch (error) {
+                // Si hay error de CORS, intentar con el endpoint de health
+                try {
+                    const healthResponse = await fetch('http://localhost:3000/api/health', {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' },
+                        mode: 'cors'
+                    });
+                    
+                    if (healthResponse.ok) {
+                        statusElement.textContent = '✅ En línea (health check)';
+                        statusElement.className = 'status running';
+                        updateApiStatusMessage(
+                            '✅ Password Service: Health check OK (puede haber restricción CORS en endpoint principal)',
+                            'success'
+                        );
+                    } else {
+                        statusElement.textContent = '❌ No disponible - Error de conexión';
+                        statusElement.className = 'status error';
+                        updateApiStatusMessage(
+                            '❌ Password Service: No disponible - Error de conexión',
+                            'error'
+                        );
+                    }
+                } catch (healthError) {
+                    statusElement.textContent = '❌ No disponible - Verifique CORS o conectividad';
+                    statusElement.className = 'status error';
+                    updateApiStatusMessage(
+                        '❌ Password Service: No disponible - Verifique CORS o que el servicio esté corriendo en http://localhost:3000',
+                        'error'
+                    );
+                    console.error('Error de conexión:', healthError);
+                }
+            }
+        }
+        
+        // Verificar Users Service (a través del Load Balancer)
+        async function checkUsersService() {
+            const statusElement = document.getElementById('users-status');
+            statusElement.textContent = '🔄 Verificando...';
+            statusElement.className = 'status checking';
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/users', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    statusElement.textContent = '✅ En línea - Load Balancer funcionando';
+                    statusElement.className = 'status running';
+                    
+                    if (data.response && Array.isArray(data.response)) {
+                        const currentMessage = document.getElementById('api-status-message').textContent;
+                        updateApiStatusMessage(
+                            `${currentMessage}\n✅ Users Service (LB): Conectado. ${data.response.length} usuarios encontrados.`,
+                            'success'
+                        );
+                        console.log(`Users Service: ${data.response.length} usuarios encontrados`);
+                    } else {
+                        const currentMessage = document.getElementById('api-status-message').textContent;
+                        updateApiStatusMessage(
+                            `${currentMessage}\n✅ Users Service (LB): Conectado correctamente.`,
+                            'success'
+                        );
+                    }
+                } else {
+                    statusElement.textContent = `⚠️ Respuesta: ${response.status}`;
+                    statusElement.className = 'status error';
+                    const currentMessage = document.getElementById('api-status-message').textContent;
+                    updateApiStatusMessage(
+                        `${currentMessage}\n⚠️ Users Service: Error ${response.status}`,
+                        'error'
+                    );
+                }
+            } catch (error) {
+                statusElement.textContent = '❌ No disponible - Verifique conectividad';
+                statusElement.className = 'status error';
+                const currentMessage = document.getElementById('api-status-message').textContent;
+                updateApiStatusMessage(
+                    `${currentMessage}\n❌ Users Service: No disponible - Verifique que el servicio esté corriendo en http://localhost:8080`,
+                    'error'
+                );
+                console.error('Error verificando Users Service:', error);
+            }
+        }
+        
+        // Ejecutar verificaciones al cargar la página
+        window.addEventListener('DOMContentLoaded', () => {
+            // Verificar Password Service
+            checkPasswordService();
+            
+            // Verificar Users Service
+            checkUsersService();
+            
+            // Actualizar cada 30 segundos
+            setInterval(() => {
+                checkPasswordService();
+                checkUsersService();
+            }, 30000);
+        });
     </script>
 </body>
 </html>

@@ -15,4 +15,12 @@ export class AppController {
   getPing(): ResponseDTO {
     return this.appService.getPing();
   }
+
+  @Get('health')
+  @ApiOperation({
+    summary: 'Health check endpoint',
+  })
+  getHealth(): { status: string; service: string } {
+    return { status: 'ok', service: 'password-service' };
+  }
 }

@@ -1,0 +1,354 @@
+### ============================================
+### PRÁCTICA #1 - MICROSERVICIOS
+### Sistema de Pruebas con REST Client (VS Code)
+### ============================================
+### 
+### Este archivo demuestra el cumplimiento de la Práctica #1:
+### - Separación por dominio (Users y Password)
+### - Comunicación síncrona HTTP entre microservicios
+### - Load Balancer con réplicas
+### - Validación de userId antes de operaciones
+###
+### Requisitos:
+### 1. Ejecutar: docker compose up -d (desde la raíz)
+### 2. Instalar extensión REST Client en VS Code
+### 3. Hacer clic en "Send Request" sobre cada request
+### ============================================
+
+### Variables globales
+@usersBaseUrl = http://localhost:8080/api/users
+@usersService1Url = http://localhost:3001/api/users
+@usersService2Url = http://localhost:3002/api/users
+@passwordBaseUrl = http://localhost:3000/api/password-manager
+@passwordHealthUrl = http://localhost:3000/api/health
+@usersHealthUrl = http://localhost:8080/api/health
+
+### ============================================
+### 1. HEALTH CHECKS
+### ============================================
+
+### Health Check - Password Service
+GET {{passwordHealthUrl}}
+Content-Type: application/json
+
+### Health Check - Users Service (Load Balancer)
+GET {{usersHealthUrl}}
+Content-Type: application/json
+
+### ============================================
+### 2. MICROSERVICIO USERS (A través del Load Balancer)
+### ============================================
+
+### 2.1. Crear Usuario 1
+POST {{usersBaseUrl}}
+Content-Type: application/json
+
+{
+  "email": "juan.perez@example.com",
+  "name": "Juan Pérez",
+  "status": "active"
+}
+
+### 2.2. Crear Usuario 2
+POST {{usersBaseUrl}}
+Content-Type: application/json
+
+{
+  "email": "maria.garcia@example.com",
+  "name": "María García",
+  "status": "active"
+}
+
+### 2.3. Crear Usuario 3
+POST {{usersBaseUrl}}
+Content-Type: application/json
+
+{
+  "email": "carlos.rodriguez@example.com",
+  "name": "Carlos Rodríguez",
+  "status": "active"
+}
+
+### 2.4. Listar todos los usuarios
+GET {{usersBaseUrl}}
+Content-Type: application/json
+
+### 2.5. Obtener usuario por ID (ID = 1)
+GET {{usersBaseUrl}}/1
+Content-Type: application/json
+
+### 2.6. Verificar si usuario existe (ID = 1)
+GET {{usersBaseUrl}}/exists/1
+Content-Type: application/json
+
+### 2.7. Verificar si usuario NO existe (ID = 999)
+GET {{usersBaseUrl}}/exists/999
+Content-Type: application/json
+
+### 2.8. Actualizar usuario (ID = 1)
+PUT {{usersBaseUrl}}/1
+Content-Type: application/json
+
+{
+  "name": "Juan Pérez Actualizado",
+  "status": "active"
+}
+
+### 2.9. Eliminar usuario (ID = 3)
+DELETE {{usersBaseUrl}}/3
+Content-Type: application/json
+
+### ============================================
+### 3. DEMOSTRACIÓN DE LOAD BALANCER
+### ============================================
+### Nota: El Load Balancer distribuye las peticiones entre users-service-1 y users-service-2
+### Hacer múltiples requests a {{usersBaseUrl}} para ver la distribución
+
+### Request 1 al Load Balancer
+GET {{usersBaseUrl}}
+Content-Type: application/json
+
+### Request 2 al Load Balancer
+GET {{usersBaseUrl}}
+Content-Type: application/json
+
+### Request 3 al Load Balancer
+GET {{usersBaseUrl}}
+Content-Type: application/json
+
+### Acceso directo a Réplica 1 (bypass del Load Balancer)
+GET {{usersService1Url}}
+Content-Type: application/json
+
+### Acceso directo a Réplica 2 (bypass del Load Balancer)
+GET {{usersService2Url}}
+Content-Type: application/json
+
+### ============================================
+### 4. MICROSERVICIO PASSWORD
+### ============================================
+### IMPORTANTE: Todas las operaciones requieren un userId válido
+### El servicio valida automáticamente con el microservicio Users
+### usando Retry y Circuit Breaker
+
+### 4.1. Listar todas las contraseñas
+GET {{passwordBaseUrl}}
+Content-Type: application/json
+
+### 4.2. Crear contraseña para usuario ID=1 (usuario válido)
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "title": "Gmail Personal",
+  "description": "Cuenta principal de Gmail",
+  "username": "juan.perez@gmail.com",
+  "password": "miContraseñaSegura123!",
+  "url": "https://gmail.com",
+  "category": "Email",
+  "notes": "Cuenta creada en 2020",
+  "masterKey": "miClaveMaestraSegura123!",
+  "userId": 1
+}
+
+### 4.3. Crear contraseña para usuario ID=2 (usuario válido)
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "title": "GitHub",
+  "description": "Cuenta de GitHub para proyectos",
+  "username": "maria.garcia",
+  "password": "githubPassword456!",
+  "url": "https://github.com",
+  "category": "Desarrollo",
+  "notes": "Cuenta profesional",
+  "masterKey": "miClaveMaestraSegura123!",
+  "userId": 2
+}
+
+### 4.4. Crear contraseña para usuario ID=1 (otra contraseña)
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "title": "Netflix",
+  "description": "Cuenta de streaming",
+  "username": "juan.perez@example.com",
+  "password": "netflixPass789!",
+  "url": "https://netflix.com",
+  "category": "Entretenimiento",
+  "notes": "Plan familiar",
+  "masterKey": "miClaveMaestraSegura123!",
+  "userId": 1
+}
+
+### 4.5. Intentar crear contraseña con userId INEXISTENTE (debe fallar)
+### Esto demuestra la validación entre microservicios
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "title": "Test Fail",
+  "description": "Esta debería fallar",
+  "username": "test@example.com",
+  "password": "test123",
+  "url": "https://test.com",
+  "category": "Test",
+  "notes": "Esta operación debe fallar",
+  "masterKey": "miClaveMaestraSegura123!",
+  "userId": 999
+}
+
+### 4.6. Obtener contraseña por ID
+GET {{passwordBaseUrl}}/1
+Content-Type: application/json
+
+### 4.7. Listar contraseñas por usuario (userId = 1)
+### Esto también valida que el usuario existe antes de listar
+GET {{passwordBaseUrl}}/user/1
+Content-Type: application/json
+
+### 4.8. Listar contraseñas por usuario (userId = 2)
+GET {{passwordBaseUrl}}/user/2
+Content-Type: application/json
+
+### 4.9. Intentar listar contraseñas de usuario INEXISTENTE (debe fallar)
+GET {{passwordBaseUrl}}/user/999
+Content-Type: application/json
+
+### 4.10. Listar contraseñas por categoría
+GET {{passwordBaseUrl}}/category/Email
+Content-Type: application/json
+
+### 4.11. Actualizar contraseña (requiere masterKey)
+PUT {{passwordBaseUrl}}/1
+Content-Type: application/json
+
+{
+  "title": "Gmail Personal Actualizado",
+  "description": "Descripción actualizada",
+  "masterKey": "miClaveMaestraSegura123!"
+}
+
+### 4.12. Descifrar contraseña (requiere masterKey correcta)
+POST {{passwordBaseUrl}}/1/decrypt
+Content-Type: application/json
+
+{
+  "masterKey": "miClaveMaestraSegura123!"
+}
+
+### 4.13. Intentar descifrar con masterKey incorrecta (debe fallar)
+POST {{passwordBaseUrl}}/1/decrypt
+Content-Type: application/json
+
+{
+  "masterKey": "claveIncorrecta"
+}
+
+### 4.14. Eliminar contraseña (requiere masterKey)
+DELETE {{passwordBaseUrl}}/2?masterKey=miClaveMaestraSegura123!
+Content-Type: application/json
+
+### ============================================
+### 5. FLUJO COMPLETO DE DEMOSTRACIÓN
+### ============================================
+### Este flujo demuestra el funcionamiento completo del sistema
+
+### Paso 1: Verificar que los servicios están activos
+GET {{passwordHealthUrl}}
+Content-Type: application/json
+
+###
+GET {{usersHealthUrl}}
+Content-Type: application/json
+
+### Paso 2: Crear un nuevo usuario
+POST {{usersBaseUrl}}
+Content-Type: application/json
+
+{
+  "email": "demo@example.com",
+  "name": "Usuario Demo",
+  "status": "active"
+}
+
+### Paso 3: Verificar que el usuario fue creado
+GET {{usersBaseUrl}}/exists/1
+Content-Type: application/json
+
+### Paso 4: Crear una contraseña para ese usuario
+### (El servicio Password validará automáticamente que el usuario existe)
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "title": "Demo Account",
+  "description": "Cuenta de demostración",
+  "username": "demo@example.com",
+  "password": "demoPassword123!",
+  "url": "https://demo.com",
+  "category": "Demo",
+  "notes": "Cuenta de prueba",
+  "masterKey": "demoMasterKey123!",
+  "userId": 1
+}
+
+### Paso 5: Listar todas las contraseñas del usuario
+GET {{passwordBaseUrl}}/user/1
+Content-Type: application/json
+
+### Paso 6: Descifrar la contraseña creada
+POST {{passwordBaseUrl}}/1/decrypt
+Content-Type: application/json
+
+{
+  "masterKey": "demoMasterKey123!"
+}
+
+### ============================================
+### 6. PRUEBAS DE RESILIENCIA
+### ============================================
+### Nota: Para probar Retry y Circuit Breaker, sería necesario
+### detener temporalmente el servicio Users y observar el comportamiento.
+### Estas pruebas requieren manipulación manual del sistema.
+
+### Verificar estado del Load Balancer (debe responder aunque una réplica falle)
+GET {{usersBaseUrl}}
+Content-Type: application/json
+
+### Verificar que el servicio Password puede validar usuarios
+### (Si Users está caído, debería activarse el Circuit Breaker después de 5 fallos)
+GET {{usersBaseUrl}}/exists/1
+Content-Type: application/json
+
+### ============================================
+### NOTAS PARA EL DOCENTE
+### ============================================
+###
+### 1. SEPARACIÓN POR DOMINIO:
+###    - Users Service: Gestión independiente de usuarios
+###    - Password Service: Gestión independiente de contraseñas
+###    - Cada uno con su propia base de datos SQLite
+###
+### 2. COMUNICACIÓN ENTRE MICROSERVICIOS:
+###    - Password Service valida userId llamando a Users Service
+###    - Se puede verificar en requests 4.5 y 4.9 (deben fallar con 404)
+###
+### 3. LOAD BALANCER:
+###    - Requests a {{usersBaseUrl}} se distribuyen entre réplicas
+###    - Se puede verificar accediendo directamente a {{usersService1Url}} y {{usersService2Url}}
+###
+### 4. RETRY Y CIRCUIT BREAKER:
+###    - Implementados en user-client.service.ts
+###    - Retry: 2 reintentos con timeout de 2s
+###    - Circuit Breaker: Umbral de 5 fallos, cooldown de 15s
+###    - Para probar: detener users-service-lb temporalmente y observar logs
+###
+### 5. VALIDACIÓN DE USERID:
+###    - Todas las operaciones de Password que requieren userId validan primero
+###    - Ver requests 4.2, 4.3, 4.5, 4.7, 4.8, 4.9
+###
+### ============================================
+
