@@ -1,0 +1,284 @@
+###
+### PRÁCTICA #3 - AUTENTICACIÓN SERVICIO A SERVICIO
+### Archivo de pruebas para REST Client (VS Code Extension: humao.rest-client)
+###
+### Este archivo demuestra la autenticación OAuth2/Keycloak entre microservicios
+###
+
+### ============================================
+### 1. VARIABLES Y CONFIGURACIÓN
+### ============================================
+
+@host = http://localhost
+@keycloak_port = 8090
+@keycloak_url = {{host}}:{{keycloak_port}}
+@realm = microservices-realm
+
+# Cliente password-service (cliente HTTP que llama a users-service)
+@client_id_password = password-service
+@client_secret_password = password-service-secret-12345
+
+# Cliente users-service (servidor receptor)
+@client_id_users = users-service
+@client_secret_users = users-service-secret-12345
+
+# URLs de los microservicios
+@users_service_url = {{host}}:8080
+@password_service_url = {{host}}:3000
+
+# Token de acceso (se llenará automáticamente después de obtenerlo)
+@access_token = 
+
+### ============================================
+### 2. OBTENCIÓN DE TOKENS DESDE KEYCLOAK
+### ============================================
+
+### 2.1. Obtener token para password-service (cliente)
+### Este es el flujo client_credentials que usa password-service internamente
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+> {%
+    // Guardar el token en la variable para uso posterior
+    if (response.status === 200) {
+        client.global.set("access_token", response.body.access_token);
+        client.log("✅ Token obtenido exitosamente: " + response.body.access_token.substring(0, 50) + "...");
+        client.log("⏱️  Expira en: " + response.body.expires_in + " segundos");
+    } else {
+        client.log("❌ Error al obtener token: " + response.status);
+    }
+%}
+
+### 2.2. Obtener token para users-service (servidor)
+### Nota: users-service normalmente no necesita obtener tokens, pero lo incluimos para pruebas
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_users}}&client_secret={{client_secret_users}}
+
+### 2.3. Intentar obtener token con credenciales inválidas (debe fallar)
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret=secret-incorrecto
+
+### ============================================
+### 3. VERIFICACIÓN DE HEALTH CHECKS
+### ============================================
+### Nota: Los endpoints /health NO requieren autenticación
+
+### 3.1. Health check de users-service (sin autenticación - debe funcionar)
+GET {{users_service_url}}/api/health
+
+### 3.2. Health check de password-service (sin autenticación - debe funcionar)
+GET {{password_service_url}}/api/health
+
+### ============================================
+### 4. PRUEBAS DE AUTENTICACIÓN EN USERS-SERVICE
+### ============================================
+### users-service requiere token Bearer válido para todos los endpoints excepto /health
+
+### 4.1. Intentar acceder SIN token (debe fallar con 401 Unauthorized)
+GET {{users_service_url}}/api/users
+
+### 4.2. Intentar acceder con token inválido (debe fallar con 401 Unauthorized)
+GET {{users_service_url}}/api/users
+Authorization: Bearer token-invalido-12345
+
+### 4.3. Obtener token válido primero (usar el resultado de 2.1)
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+> {%
+    if (response.status === 200) {
+        client.global.set("access_token", response.body.access_token);
+    }
+%}
+
+### 4.4. Acceder CON token válido (debe funcionar - 200 OK)
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token}}
+
+### 4.5. Obtener usuario por ID con token válido
+GET {{users_service_url}}/api/users/1
+Authorization: Bearer {{access_token}}
+
+### 4.6. Verificar existencia de usuario con token válido
+GET {{users_service_url}}/api/users/exists/1
+Authorization: Bearer {{access_token}}
+
+### 4.7. Crear usuario con token válido
+POST {{users_service_url}}/api/users
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "email": "test@example.com",
+  "name": "Usuario de Prueba",
+  "status": "active"
+}
+
+### 4.8. Intentar crear usuario SIN token (debe fallar con 401)
+POST {{users_service_url}}/api/users
+Content-Type: application/json
+
+{
+  "email": "test2@example.com",
+  "name": "Usuario Sin Token",
+  "status": "active"
+}
+
+### ============================================
+### 5. PRUEBAS DE FLUJO COMPLETO SERVICIO A SERVICIO
+### ============================================
+### Simular el comportamiento real: password-service llama a users-service
+
+### 5.1. Obtener token como password-service lo haría internamente
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+> {%
+    if (response.status === 200) {
+        client.global.set("access_token", response.body.access_token);
+        client.log("✅ Token obtenido para password-service");
+    }
+%}
+
+### 5.2. Llamar a users-service con el token (simulando password-service)
+### Este es el endpoint que password-service usa internamente para validar usuarios
+GET {{users_service_url}}/api/users/exists/1
+Authorization: Bearer {{access_token}}
+
+### 5.3. Crear contraseña en password-service (esto internamente llama a users-service con token)
+### Nota: password-service obtiene el token automáticamente y lo incluye en la llamada a users-service
+POST {{password_service_url}}/api/password-manager
+Content-Type: application/json
+
+{
+  "title": "Gmail Personal",
+  "description": "Cuenta principal de Gmail",
+  "password": "miPassword123",
+  "masterKey": "miClaveMaestra123",
+  "userId": 1,
+  "category": "Email"
+}
+
+### 5.4. Listar contraseñas (password-service no requiere autenticación externa)
+GET {{password_service_url}}/api/password-manager
+
+### ============================================
+### 6. PRUEBAS DE TOKEN MANIPULADO/INVÁLIDO
+### ============================================
+
+### 6.1. Obtener token válido
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+> {%
+    if (response.status === 200) {
+        // Manipular el token (agregar caracteres al final para invalidarlo)
+        const token = response.body.access_token;
+        client.global.set("access_token_manipulado", token + "INVALIDO");
+        client.log("⚠️  Token manipulado creado para prueba");
+    }
+%}
+
+### 6.2. Intentar usar token manipulado (debe fallar con 401)
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token_manipulado}}
+
+### 6.3. Intentar usar token expirado (simulado - en producción expiraría naturalmente)
+### Nota: Para probar tokens expirados, necesitarías esperar o usar un token muy antiguo
+GET {{users_service_url}}/api/users
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MDAwMDAwMDB9.token-expirado-simulado
+
+### ============================================
+### 7. VERIFICACIÓN DE JWKS (OPCIONAL - TÉCNICO)
+### ============================================
+### Verificar que Keycloak expone las claves públicas para validación JWT
+
+### 7.1. Obtener JWKS (JSON Web Key Set) de Keycloak
+GET {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/certs
+
+### 7.2. Verificar información del realm
+GET {{keycloak_url}}/realms/{{realm}}
+
+### ============================================
+### 8. RESUMEN DE PRUEBAS PARA DEFENSA
+### ============================================
+### Ejecutar estas pruebas en orden para demostrar la autenticación servicio a servicio
+
+### PASO 1: Verificar que sin token, users-service rechaza peticiones
+GET {{users_service_url}}/api/users
+### Esperado: 401 Unauthorized
+
+### PASO 2: Obtener token desde Keycloak
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+> {%
+    if (response.status === 200) {
+        client.global.set("access_token", response.body.access_token);
+        client.log("✅ PASO 2 COMPLETADO: Token obtenido");
+    }
+%}
+
+### PASO 3: Usar token válido para acceder a users-service
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token}}
+### Esperado: 200 OK con lista de usuarios
+
+### PASO 4: Demostrar que password-service usa autenticación automáticamente
+### (password-service obtiene el token internamente y lo incluye en llamadas a users-service)
+POST {{password_service_url}}/api/password-manager
+Content-Type: application/json
+
+{
+  "title": "Prueba de Autenticación",
+  "description": "Esta llamada demuestra que password-service autentica automáticamente",
+  "password": "test123",
+  "masterKey": "master123",
+  "userId": 1,
+  "category": "Test"
+}
+### Esperado: Si el usuario existe, se crea la contraseña (password-service valida con users-service usando token)
+
+### ============================================
+### NOTAS PARA LA DEFENSA
+### ============================================
+### 
+### 1. AUTENTICACIÓN SERVICIO A SERVICIO:
+###    - password-service obtiene token desde Keycloak usando client_credentials
+###    - password-service incluye token en cabecera Authorization: Bearer <token>
+###    - users-service valida el token usando JWKS de Keycloak
+###    - users-service rechaza peticiones sin token o con token inválido (401)
+###
+### 2. FLUJO COMPLETO:
+###    a) password-service necesita validar un usuario
+###    b) password-service obtiene token desde Keycloak (OAuth2Service)
+###    c) password-service llama a users-service con token Bearer
+###    d) users-service valida token (JwtAuthGuard)
+###    e) users-service responde si token es válido
+###
+### 3. SEGURIDAD:
+###    - No hay confianza implícita por estar en la misma red Docker
+###    - Cada petición requiere token válido
+###    - Tokens tienen expiración (configurado en Keycloak)
+###    - Validación de firma, issuer, audiencia y expiración
+###
+### 4. EVIDENCIA:
+###    - Prueba 4.1: Sin token → 401 (demuestra que se requiere autenticación)
+###    - Prueba 4.4: Con token → 200 (demuestra que la autenticación funciona)
+###    - Prueba 5.3: Flujo completo servicio a servicio (password-service → users-service)
+###
+
