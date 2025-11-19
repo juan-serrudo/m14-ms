@@ -15,6 +15,9 @@ export default () => {
     ENV_CORS: process.env.ENV_CORS || '',
     ENV_SWAGGER_SHOW: process.env.ENV_SWAGGER_SHOW === 'true' || false,
     ENV_SYNCHRONIZE: process.env.ENV_SYNCHRONIZE === 'true' || false,
+    KAFKA_BROKER: process.env.KAFKA_BROKER || 'kafka-broker:9092',
+    KAFKA_CLIENT_ID: process.env.KAFKA_CLIENT_ID || 'users-service',
+    KAFKA_USER_EVENTS_TOPIC: process.env.KAFKA_USER_EVENTS_TOPIC || 'user-events',
   };
 };
 

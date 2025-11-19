@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ResponseDTO } from 'src/dto/response.dto';
 import { CreatePasswordManagerDto, UpdatePasswordManagerDto, DecryptPasswordDto } from 'src/dto/password-manager.dto';
 import { PasswordManager } from 'src/entitys/password-manager.entity';
@@ -6,15 +6,18 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as CryptoJS from 'crypto-js';
 import { UserClientService } from '../user-client/user-client.service';
+import { UserCacheService } from '../user-cache/user-cache.service';
 
 @Injectable()
 export class PasswordManagerService {
   private readonly saltRounds = 12;
+  private readonly logger = new Logger(PasswordManagerService.name);
 
   constructor(
     @Inject('PASSWORD_MANAGER_REPOSITORY')
     private passwordManagerRepository: Repository<PasswordManager>,
     private readonly userClientService: UserClientService,
+    private readonly userCacheService: UserCacheService,
   ) {}
 
   // Método para cifrar contraseña usando AES
@@ -113,8 +116,28 @@ export class PasswordManagerService {
     };
 
     try {
-      // Validar que el usuario existe usando el cliente HTTP con Retry y Circuit Breaker
-      const userExists = await this.userClientService.userExists(passwordData.userId);
+      // VALIDACIÓN DE USUARIO: Eventual Consistency + Fallback HTTP
+      // 1. Primero intenta usar el cache local (eventual consistency desde Kafka)
+      // 2. Si no está en cache, usa validación HTTP síncrona como fallback
+      let userExists = await this.userCacheService.userExists(passwordData.userId);
+      
+      if (!userExists) {
+        this.logger.debug(`Usuario ${passwordData.userId} no encontrado en cache, validando vía HTTP...`);
+        // Fallback: validación HTTP síncrona (con Retry y Circuit Breaker)
+        try {
+          userExists = await this.userClientService.userExists(passwordData.userId);
+          if (userExists) {
+            // Si existe vía HTTP pero no en cache, puede ser que el evento aún no llegó
+            // Esto demuestra eventual consistency
+            this.logger.warn(`Usuario ${passwordData.userId} existe vía HTTP pero no en cache local (eventual consistency)`);
+          }
+        } catch (httpError) {
+          this.logger.error(`Error al validar usuario vía HTTP: ${httpError.message}`);
+        }
+      } else {
+        this.logger.debug(`Usuario ${passwordData.userId} encontrado en cache local (eventual consistency)`);
+      }
+
       if (!userExists) {
         response.error = true;
         response.message = `El usuario con ID ${passwordData.userId} no existe.`;
@@ -194,7 +217,18 @@ export class PasswordManagerService {
       // Si se actualiza el userId, validar que el nuevo usuario existe
       const userIdToValidate = passwordData.userId !== undefined ? passwordData.userId : existingPassword.userId;
       if (passwordData.userId !== undefined && passwordData.userId !== existingPassword.userId) {
-        const userExists = await this.userClientService.userExists(passwordData.userId);
+        // Validación con eventual consistency + fallback HTTP
+        let userExists = await this.userCacheService.userExists(passwordData.userId);
+        
+        if (!userExists) {
+          this.logger.debug(`Usuario ${passwordData.userId} no encontrado en cache, validando vía HTTP...`);
+          try {
+            userExists = await this.userClientService.userExists(passwordData.userId);
+          } catch (httpError) {
+            this.logger.error(`Error al validar usuario vía HTTP: ${httpError.message}`);
+          }
+        }
+
         if (!userExists) {
           response.error = true;
           response.message = `El usuario con ID ${passwordData.userId} no existe.`;
@@ -374,8 +408,22 @@ export class PasswordManagerService {
     };
 
     try {
-      // Validar que el usuario existe usando el cliente HTTP con Retry y Circuit Breaker
-      const userExists = await this.userClientService.userExists(userId);
+      // VALIDACIÓN DE USUARIO: Eventual Consistency + Fallback HTTP
+      // 1. Primero intenta usar el cache local (eventual consistency desde Kafka)
+      // 2. Si no está en cache, usa validación HTTP síncrona como fallback
+      let userExists = await this.userCacheService.userExists(userId);
+      
+      if (!userExists) {
+        this.logger.debug(`Usuario ${userId} no encontrado en cache, validando vía HTTP...`);
+        try {
+          userExists = await this.userClientService.userExists(userId);
+        } catch (httpError) {
+          this.logger.error(`Error al validar usuario vía HTTP: ${httpError.message}`);
+        }
+      } else {
+        this.logger.debug(`Usuario ${userId} encontrado en cache local (eventual consistency)`);
+      }
+
       if (!userExists) {
         response.error = true;
         response.message = `El usuario con ID ${userId} no existe.`;

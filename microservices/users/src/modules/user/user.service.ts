@@ -1,14 +1,18 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ResponseDTO } from 'src/dto/response.dto';
 import { CreateUserDto, UpdateUserDto } from 'src/dto/user.dto';
 import { User } from 'src/entitys/user.entity';
 import { Repository } from 'typeorm';
+import { KafkaProducerService } from '../kafka/kafka-producer.service';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     @Inject('USER_REPOSITORY')
     private userRepository: Repository<User>,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   async findAll(): Promise<ResponseDTO> {
@@ -134,6 +138,20 @@ export class UserService {
 
       const savedUser = await this.userRepository.save(newUser);
 
+      // PUBLICAR EVENTO KAFKA: USER_CREATED
+      // Esto demuestra comunicación asíncrona event-driven
+      try {
+        await this.kafkaProducer.publishUserCreated({
+          id: savedUser.id,
+          email: savedUser.email,
+          name: savedUser.name,
+          status: savedUser.status,
+        });
+      } catch (kafkaError) {
+        // Log del error pero no fallar la operación principal
+        this.logger.error(`Error al publicar evento USER_CREATED: ${kafkaError.message}`);
+      }
+
       response.error = false;
       response.message = 'Usuario creado exitosamente.';
       response.response = savedUser;
@@ -191,6 +209,23 @@ export class UserService {
 
       await this.userRepository.update(id, updateData);
 
+      // Obtener el usuario actualizado para el evento
+      const updatedUser = await this.userRepository.findOne({ where: { id } });
+
+      // PUBLICAR EVENTO KAFKA: USER_UPDATED
+      if (updatedUser) {
+        try {
+          await this.kafkaProducer.publishUserUpdated({
+            id: updatedUser.id,
+            email: updatedUser.email,
+            name: updatedUser.name,
+            status: updatedUser.status,
+          });
+        } catch (kafkaError) {
+          this.logger.error(`Error al publicar evento USER_UPDATED: ${kafkaError.message}`);
+        }
+      }
+
       response.error = false;
       response.message = 'Usuario actualizado exitosamente.';
       response.response = { id };
@@ -225,7 +260,17 @@ export class UserService {
         return response;
       }
 
+      // Guardar datos del usuario antes de eliminarlo para el evento
+      const userEmail = existingUser.email;
+
       await this.userRepository.delete(id);
+
+      // PUBLICAR EVENTO KAFKA: USER_DELETED
+      try {
+        await this.kafkaProducer.publishUserDeleted(id, userEmail);
+      } catch (kafkaError) {
+        this.logger.error(`Error al publicar evento USER_DELETED: ${kafkaError.message}`);
+      }
 
       response.error = false;
       response.message = 'Usuario eliminado exitosamente.';

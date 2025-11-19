@@ -8,6 +8,8 @@ import { PasswordManagerService } from './modules/password-manager/password-mana
 import { databaseProviders } from './providers/database.providers';
 import { passwordManagerProviders } from './providers/password-manager.providers';
 import { UserClientModule } from './modules/user-client/user-client.module';
+import { KafkaModule } from './modules/kafka/kafka.module';
+import { UserCacheModule } from './modules/user-cache/user-cache.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { UserClientModule } from './modules/user-client/user-client.module';
       isGlobal: true
     }),
     UserClientModule,
+    KafkaModule,
+    UserCacheModule,
   ],
   controllers: [
     AppController,

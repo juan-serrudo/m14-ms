@@ -16,5 +16,9 @@ export default () => {
     ENV_SWAGGER_SHOW: process.env.ENV_SWAGGER_SHOW === 'true' || false,
     ENV_SYNCHRONIZE: process.env.ENV_SYNCHRONIZE === 'true' || false,
     USER_SERVICE_BASE_URL: process.env.USER_SERVICE_BASE_URL || 'http://users-service-lb',
+    KAFKA_BROKER: process.env.KAFKA_BROKER || 'kafka-broker:9092',
+    KAFKA_CLIENT_ID: process.env.KAFKA_CLIENT_ID || 'password-service',
+    KAFKA_USER_EVENTS_TOPIC: process.env.KAFKA_USER_EVENTS_TOPIC || 'user-events',
+    KAFKA_GROUP_ID: process.env.KAFKA_GROUP_ID || 'password-service-group',
   };
 };

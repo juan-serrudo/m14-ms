@@ -17,9 +17,10 @@ docker compose up -d
 ```
 
 Esto levantará todos los servicios:
-- 2 réplicas del microservicio `users`
+- **Infraestructura Kafka**: Zookeeper, Kafka Broker, Kafka Init
+- 2 réplicas del microservicio `users` (con Kafka Producer)
 - 1 Load Balancer NGINX para `users`
-- 1 microservicio `password`
+- 1 microservicio `password` (con Kafka Consumer)
 - 1 frontend
 
 ### Verificar Servicios
@@ -61,6 +62,8 @@ docker compose logs -f [nombre-servicio]
 - `PUT /api/password-manager/:id` - Actualiza contraseña
 - `DELETE /api/password-manager/:id?masterKey=xxx` - Elimina contraseña
 - `POST /api/password-manager/:id/decrypt` - Descifra contraseña
+- `GET /api/user-cache/stats` - Estadísticas del cache local (eventual consistency)
+- `GET /api/user-cache/users` - Lista usuarios en cache local
 
 ### Frontend
 - URL: `http://localhost:8081`
@@ -68,18 +71,25 @@ docker compose logs -f [nombre-servicio]
 ## 🏗️ Arquitectura
 
 ```
-Frontend (Puerto 80)
+Frontend (Puerto 8081)
     │
     ├── Password Service (Puerto 3000)
     │       │
-    │       └── Users Service LB (Puerto 8080)
-    │               │
-    │               ├── Users Service 1 (Puerto 3001)
-    │               └── Users Service 2 (Puerto 3001)
+    │       ├── Users Service LB (Puerto 8080) [HTTP Síncrono]
+    │       │       │
+    │       │       ├── Users Service 1 (Puerto 3001)
+    │       │       └── Users Service 2 (Puerto 3001)
+    │       │
+    │       └── Kafka Consumer → User Cache (Eventual Consistency)
+    │
+    └── Kafka Broker
+            │
+            └── Users Service (Producer) → user-events topic
 ```
 
 ## 📋 Características Implementadas
 
+### Práctica #1 - Comunicación Síncrona
 - ✅ Separación por dominio (Users y Password)
 - ✅ Comunicación síncrona HTTP entre microservicios
 - ✅ Patrón Retry (2 reintentos, timeout 2s)
@@ -88,6 +98,13 @@ Frontend (Puerto 80)
 - ✅ Bases de datos SQLite independientes
 - ✅ Docker Compose para orquestación completa
 
+### Práctica #2 - Comunicación Asíncrona con Kafka
+- ✅ Infraestructura Kafka (Zookeeper + Broker + Init)
+- ✅ Kafka Producer en users-service (publica eventos)
+- ✅ Kafka Consumer en password-service (consume eventos)
+- ✅ Cache local de usuarios (eventual consistency)
+- ✅ Patrón híbrido: Cache local + Fallback HTTP
+- ✅ Eventos: USER_CREATED, USER_UPDATED, USER_DELETED
 
 ## 🔧 Desarrollo Local
 
@@ -112,4 +129,14 @@ npm run start:dev
 - Las bases de datos SQLite se crean automáticamente en `/app/data/` dentro de los contenedores
 - Los volúmenes de Docker persisten las bases de datos entre reinicios
 - El Load Balancer distribuye la carga entre las 2 réplicas de users-service usando round-robin
+- Kafka topics se crean automáticamente al iniciar (kafka-init)
+- El cache local de usuarios se actualiza mediante eventos de Kafka (eventual consistency)
+- Si Kafka no está disponible, password-service usa validación HTTP como fallback
+
+## 📚 Documentación
+
+- `IMPLEMENTACION.md` - Detalles de la Práctica #1 (Comunicación Síncrona)
+- `PRACTICA2.md` - Detalles de la Práctica #2 (Comunicación Asíncrona con Kafka)
+- `MIGRACION_BASE_DATOS.md` - Migración de bases de datos compartidas
+- `tests/practica1.http` - Archivo de pruebas REST Client para Práctica #1
 

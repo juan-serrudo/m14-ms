@@ -1,6 +1,70 @@
-version: '3.8'
-
 services:
+  # ============================================
+  # INFRAESTRUCTURA KAFKA
+  # ============================================
+
+  # Zookeeper - Requerido por Kafka para coordinación
+  zookeeper:
+    image: bitnamilegacy/zookeeper:3.9
+    container_name: zookeeper
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka Broker
+  kafka-broker:
+    image: bitnamilegacy/kafka:3.6
+    container_name: kafka-broker
+    depends_on:
+      - zookeeper
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-broker:9092
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Kafka Init - Crea los topics necesarios al arrancar
+  kafka-init:
+    image: bitnamilegacy/kafka:3.6
+    container_name: kafka-init
+    depends_on:
+      kafka-broker:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "Esperando a que Kafka esté disponible..."
+        until kafka-topics.sh --bootstrap-server kafka-broker:9092 --list; do
+          echo "Kafka no está disponible aún, esperando..."
+          sleep 2
+        done
+        echo "Kafka está disponible, creando topics..."
+        # Crear topic user-events (idempotente: si existe, no falla)
+        kafka-topics.sh --bootstrap-server kafka-broker:9092 \
+          --create --if-not-exists \
+          --topic user-events \
+          --partitions 3 \
+          --replication-factor 1 || echo "Topic user-events ya existe o error al crearlo"
+        echo "Topics creados exitosamente"
+        kafka-topics.sh --bootstrap-server kafka-broker:9092 --list
   # Microservicio Users - Réplica 1
   # NOTA: Comparte el mismo volumen (users-db) con users-service-2
   # para que ambas réplicas vean la misma base de datos SQLite
@@ -17,6 +81,9 @@ services:
       - ENV_SYNCHRONIZE=true
       - ENV_SWAGGER_SHOW=false
       - DATABASE_PATH=/app/data/users.sqlite
+      - KAFKA_BROKER=kafka-broker:9092
+      - KAFKA_CLIENT_ID=users-service-1
+      - KAFKA_USER_EVENTS_TOPIC=user-events
     volumes:
       - users-db:/app/data
     networks:
@@ -44,6 +111,9 @@ services:
       - ENV_SYNCHRONIZE=true
       - ENV_SWAGGER_SHOW=false
       - DATABASE_PATH=/app/data/users.sqlite
+      - KAFKA_BROKER=kafka-broker:9092
+      - KAFKA_CLIENT_ID=users-service-2
+      - KAFKA_USER_EVENTS_TOPIC=user-events
     volumes:
       - users-db:/app/data
     networks:
@@ -66,6 +136,7 @@ services:
     depends_on:
       - users-service-1
       - users-service-2
+      - kafka-init
     networks:
       - microservices-network
     healthcheck:
@@ -93,10 +164,15 @@ services:
       - ENV_SWAGGER_SHOW=false
       - USER_SERVICE_BASE_URL=http://users-service-lb
       - DATABASE_PATH=/app/data/password.sqlite
+      - KAFKA_BROKER=kafka-broker:9092
+      - KAFKA_CLIENT_ID=password-service
+      - KAFKA_USER_EVENTS_TOPIC=user-events
+      - KAFKA_GROUP_ID=password-service-group
     volumes:
       - password-db:/app/data
     depends_on:
       - users-service-lb
+      - kafka-init
     networks:
       - microservices-network
     healthcheck:
@@ -117,6 +193,7 @@ services:
     depends_on:
       - password-service
       - users-service-lb
+      - kafka-init
     networks:
       - microservices-network
 

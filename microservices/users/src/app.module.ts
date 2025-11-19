@@ -7,6 +7,7 @@ import { UserController } from './modules/user/user.controller';
 import { UserService } from './modules/user/user.service';
 import { databaseProviders } from './providers/database.providers';
 import { userProviders } from './providers/user.providers';
+import { KafkaModule } from './modules/kafka/kafka.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { userProviders } from './providers/user.providers';
       expandVariables: true,
       isGlobal: true
     }),
+    KafkaModule,
   ],
   controllers: [
     AppController,
