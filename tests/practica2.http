@@ -130,7 +130,8 @@ Content-Type: application/json
 
 {
   "userId": 1,
-  "site": "github.com",
+  "title": "GitHub",
+  "url": "https://github.com",
   "username": "maria.garcia",
   "password": "miPassword123",
   "category": "Desarrollo",
@@ -147,7 +148,8 @@ Content-Type: application/json
 
 {
   "userId": 2,
-  "site": "gmail.com",
+  "title": "Gmail",
+  "url": "https://gmail.com",
   "username": "carlos.rodriguez",
   "password": "otraPassword456",
   "category": "Email",
@@ -190,7 +192,8 @@ Content-Type: application/json
 
 {
   "userId": 999,
-  "site": "test.com",
+  "title": "Test Site",
+  "url": "https://test.com",
   "username": "usuario.inexistente",
   "password": "password123",
   "category": "Test",

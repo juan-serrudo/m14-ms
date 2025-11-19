@@ -8,18 +8,22 @@ import { KafkaProducerService } from './kafka-producer.service';
     ClientsModule.registerAsync([
       {
         name: 'KAFKA_PRODUCER',
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.KAFKA,
-          options: {
-            client: {
-              clientId: configService.get<string>('KAFKA_CLIENT_ID'),
-              brokers: [configService.get<string>('KAFKA_BROKER')],
+        useFactory: (configService: ConfigService) => {
+          const broker = configService.get<string>('KAFKA_BROKER') || 'kafka-broker:9092';
+          const clientId = configService.get<string>('KAFKA_CLIENT_ID') || 'users-service';
+          return {
+            transport: Transport.KAFKA,
+            options: {
+              client: {
+                clientId: clientId,
+                brokers: [broker],
+              },
+              consumer: {
+                groupId: clientId + '-group',
+              },
             },
-            consumer: {
-              groupId: configService.get<string>('KAFKA_CLIENT_ID') + '-group',
-            },
-          },
-        }),
+          };
+        },
         inject: [ConfigService],
       },
     ]),
