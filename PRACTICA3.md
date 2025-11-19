@@ -152,7 +152,7 @@ JWT_ISSUER=http://keycloak:8080/realms/microservices-realm
 ### Iniciar toda la infraestructura
 
 ```bash
-docker compose up
+docker compose up --build
 ```
 
 Esto levanta:
@@ -176,6 +176,139 @@ curl http://localhost:8080/api/users
 curl http://localhost:3000/api/password-manager
 # Funciona porque password-service incluye el token automáticamente
 ```
+
+---
+
+## ⚙️ Pruebas con REST Client para Defensa
+
+### Requisitos
+
+1. **VS Code** con la extensión **REST Client** (`humao.rest-client`)
+2. **Docker Compose** instalado y funcionando
+3. Toda la infraestructura levantada con `docker compose up --build`
+
+### Pasos para la Defensa (3 minutos)
+
+#### 1. Preparación (30 segundos)
+
+```bash
+# Desde la raíz del proyecto
+docker compose up --build
+```
+
+Esperar a que todos los servicios estén `healthy` (verificar con `docker compose ps`).
+
+#### 2. Abrir archivos de prueba en VS Code
+
+Abrir los siguientes archivos en VS Code:
+- `tests/practica1.http` - Demuestra separación por dominio y arquitectura
+- `tests/practica2.http` - Demuestra comunicación asíncrona con Kafka
+- `tests/practica3.http` - Demuestra autenticación servicio a servicio
+
+#### 3. Secuencia de demostración recomendada
+
+##### Práctica #1 - Arquitectura y Dominios (30 segundos)
+
+**Ejecutar en `practica1.http`:**
+
+1. **Request 2.1**: Crear usuario
+   - **Comentar**: "Aquí vemos el dominio de Users, con su propia base de datos"
+   - **Resultado esperado**: 201 Created
+
+2. **Request 4.2**: Crear contraseña
+   - **Comentar**: "Aquí vemos el dominio de Password, independiente. Valida el usuario vía HTTP síncrono"
+   - **Resultado esperado**: 201 Created
+
+3. **Request 3.1-3.3**: Múltiples requests al Load Balancer
+   - **Comentar**: "El Load Balancer distribuye entre 2 réplicas, alta disponibilidad"
+   - **Resultado esperado**: 200 OK (puede variar según la réplica)
+
+##### Práctica #2 - Kafka y Eventos (30 segundos)
+
+**Ejecutar en `practica2.http`:**
+
+1. **Request 2.1**: Verificar cache vacío
+   - **Comentar**: "El cache local está vacío inicialmente"
+   - **Resultado esperado**: `{"totalUsers": 0}`
+
+2. **Request 3.1**: Crear usuario
+   - **Comentar**: "users-service publica evento USER_CREATED a Kafka"
+   - **Resultado esperado**: 201 Created
+
+3. **Esperar 2-3 segundos** (eventual consistency)
+
+4. **Request 3.2**: Verificar cache
+   - **Comentar**: "password-service consumió el evento y actualizó su cache local. Eventual consistency."
+   - **Resultado esperado**: `{"totalUsers": 1}`
+
+##### Práctica #3 - Autenticación Servicio a Servicio (2 minutos)
+
+**Ejecutar en `practica3.http`:**
+
+1. **Request 4.1**: Intentar acceder sin token
+   - **Comentar**: "Sin token, users-service rechaza la petición. Zero Trust Architecture."
+   - **Resultado esperado**: 401 Unauthorized
+   - **Tiempo**: 10 segundos
+
+2. **Request 2.1**: Obtener token desde Keycloak
+   - **Comentar**: "password-service obtiene token usando client_credentials. Este es el flujo OAuth2."
+   - **Resultado esperado**: 200 OK con `access_token`
+   - **Tiempo**: 10 segundos
+
+3. **Request 4.4**: Acceder con token válido
+   - **Comentar**: "Con token válido, users-service acepta. Valida firma, issuer, audience y expiración usando JWKS."
+   - **Resultado esperado**: 200 OK con lista de usuarios
+   - **Tiempo**: 10 segundos
+
+4. **Request 5.3**: Flujo completo servicio a servicio
+   - **Comentar**: "password-service crea una contraseña. Internamente obtiene token automáticamente y lo incluye en la llamada a users-service. Flujo completo demostrado."
+   - **Resultado esperado**: 201 Created (si el usuario existe)
+   - **Tiempo**: 20 segundos
+
+5. **Request 7.1** (opcional si hay tiempo): Obtener JWKS
+   - **Comentar**: "users-service usa estas claves públicas de Keycloak para validar la firma JWT"
+   - **Resultado esperado**: 200 OK con JSON Web Key Set
+   - **Tiempo**: 10 segundos
+
+#### 4. Puntos clave a mencionar durante la demostración
+
+- **Alta cohesión y bajo acoplamiento**: Cada servicio es independiente, se comunican vía HTTP REST
+- **Separación por dominio**: Users y Password son bounded contexts independientes
+- **Load Balancer**: Distribuye carga entre réplicas para alta disponibilidad
+- **Event-Driven Architecture**: Kafka permite comunicación asíncrona y eventual consistency
+- **Zero Trust**: Autenticación servicio a servicio con OAuth2/Keycloak, sin confianza implícita
+- **Validación JWT**: users-service valida tokens usando JWKS, verificando firma, issuer, audience y expiración
+
+#### 5. Trade-offs y decisiones arquitectónicas
+
+**Puntos a mencionar si el docente pregunta:**
+
+- **HTTP síncrono vs Kafka asíncrono**: 
+  - HTTP: Consistencia inmediata, pero acoplamiento temporal
+  - Kafka: Eventual consistency, pero desacoplamiento y escalabilidad
+
+- **Load Balancer con réplicas**:
+  - Ventaja: Alta disponibilidad, distribución de carga
+  - Trade-off: Complejidad adicional, necesidad de sincronización de datos
+
+- **Autenticación con Keycloak**:
+  - Ventaja: Centralizada, estándar OAuth2, validación robusta
+  - Trade-off: Punto único de fallo (mitigado con alta disponibilidad en producción)
+
+- **Bases de datos SQLite por servicio**:
+  - Ventaja: Separación de datos, independencia
+  - Trade-off: No hay transacciones distribuidas (patrón correcto para microservicios)
+
+### Archivos de prueba
+
+- `tests/practica1.http`: Práctica #1 - Arquitectura y comunicación síncrona
+- `tests/practica2.http`: Práctica #2 - Comunicación asíncrona con Kafka
+- `tests/practica3.http`: Práctica #3 - Autenticación servicio a servicio
+
+Cada archivo incluye:
+- Comentarios explicativos sobre qué demuestra cada request
+- Sección "RESUMEN PARA DEFENSA" con secuencia recomendada
+- Variables de entorno para facilitar las pruebas
 
 ---
 

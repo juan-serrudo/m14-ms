@@ -220,7 +220,73 @@ GET {{passwordBaseUrl}}
 Content-Type: application/json
 
 ### ============================================
-### RESUMEN DE LA DEMOSTRACIÓN
+### RESUMEN PARA DEFENSA - PRÁCTICA #2
+### ============================================
+### 
+### Este archivo demuestra los criterios de la Práctica #2:
+### 
+### ✅ 1. COMUNICACIÓN ASÍNCRONA CON KAFKA
+###    - Kafka Producer: users-service publica eventos al crear/actualizar/eliminar usuarios
+###    - Kafka Consumer: password-service consume eventos y actualiza cache local
+###    - Eventos: USER_CREATED, USER_UPDATED, USER_DELETED
+###    - DEMOSTRACIÓN: 
+###      * Request 3.1 (crear usuario) → esperar 2-3 seg → Request 3.2 (verificar cache)
+###      * Request 3.4 (actualizar usuario) → esperar 2-3 seg → Request 3.4 (verificar cache actualizado)
+###      * Request 5.2 (eliminar usuario) → esperar 2-3 seg → Request 5.3 (verificar cache sin usuario)
+###
+### ✅ 2. EVENT-DRIVEN ARCHITECTURE (EDA)
+###    - Flujo asíncrono complementa comunicación síncrona HTTP
+###    - Desacoplamiento temporal: producer no espera respuesta del consumer
+###    - DEMOSTRACIÓN: Request 3.1 muestra que el evento se publica inmediatamente
+###      y el cache se actualiza después (eventual consistency)
+###
+### ✅ 3. EVENTUAL CONSISTENCY
+###    - Cache local en password-service se actualiza mediante eventos
+###    - No es inmediato: demuestra el concepto de eventual consistency
+###    - DEMOSTRACIÓN: Requests 2.1-2.2 (cache vacío) → 3.1 (crear usuario) 
+###      → esperar → 3.2 (cache con usuario)
+###
+### ✅ 4. PATRÓN HÍBRIDO (CACHE + FALLBACK HTTP)
+###    - password-service usa cache local cuando está disponible
+###    - Si usuario no está en cache, hace fallback a HTTP síncrono
+###    - DEMOSTRACIÓN: 
+###      * Request 4.1 (crear password con usuario en cache - usa cache)
+###      * Request 6.1 (crear password con usuario inexistente - fallback HTTP)
+###
+### ✅ 5. INFRAESTRUCTURA KAFKA COMPLETA
+###    - Zookeeper, Kafka Broker, Kafka Init (crea topics automáticamente)
+###    - DEMOSTRACIÓN: docker compose up levanta toda la infraestructura
+###
+### ============================================
+### SECUENCIA RECOMENDADA PARA DEFENSA (3 minutos)
+### ============================================
+###
+### PASO 1 (45 seg): Demostrar Kafka Producer y Consumer
+###   - Ejecutar: 2.1 (cache vacío) → 3.1 (crear usuario)
+###   - Esperar 2-3 segundos
+###   - Ejecutar: 3.2 (verificar cache - debe tener el usuario)
+###   - Comentar: "users-service publicó evento USER_CREATED, password-service lo consumió"
+###
+### PASO 2 (45 seg): Demostrar Eventual Consistency
+###   - Ejecutar: 3.4 (actualizar usuario)
+###   - Esperar 2-3 segundos
+###   - Ejecutar: 3.4 (verificar cache actualizado)
+###   - Comentar: "El cache se actualiza de forma asíncrona, eventual consistency"
+###
+### PASO 3 (60 seg): Demostrar Patrón Híbrido
+###   - Ejecutar: 4.1 (crear password - usa cache local)
+###   - Comentar: "password-service usa cache local, no necesita llamada HTTP"
+###   - Ejecutar: 6.1 (crear password con usuario inexistente)
+###   - Comentar: "Si no está en cache, hace fallback a HTTP síncrono"
+###
+### PASO 4 (30 seg): Demostrar Event-Driven Architecture
+###   - Ejecutar: 5.2 (eliminar usuario)
+###   - Esperar 2-3 segundos
+###   - Ejecutar: 5.3 (verificar cache - usuario eliminado)
+###   - Comentar: "Evento USER_DELETED se propagó asíncronamente"
+###
+### ============================================
+### NOTAS TÉCNICAS PARA EL DOCENTE
 ### ============================================
 ###
 ### ✅ Health checks funcionando

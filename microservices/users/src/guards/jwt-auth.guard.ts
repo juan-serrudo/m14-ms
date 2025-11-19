@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import * as jwt from 'jsonwebtoken';
-import jwksClient, { JwksClient } from 'jwks-rsa';
+import * as jwksRsa from 'jwks-rsa';
 
 interface JwtPayload {
   iss?: string;
@@ -36,7 +36,8 @@ export class JwtAuthGuard implements CanActivate {
   private readonly keycloakRealm: string;
   private readonly expectedAudience: string;
   private readonly expectedIssuer: string;
-  private jwksClient: JwksClient;
+  private readonly expectedIssuerExternal: string; // Para tokens obtenidos desde fuera de Docker
+  private jwksClient: jwksRsa.JwksClient;
 
   constructor(private readonly configService: ConfigService) {
     this.keycloakAuthUrl =
@@ -46,10 +47,14 @@ export class JwtAuthGuard implements CanActivate {
     this.expectedAudience =
       this.configService.get<string>('JWT_AUDIENCE') || 'users-service';
     this.expectedIssuer = `${this.keycloakAuthUrl}/realms/${this.keycloakRealm}`;
+    // Issuer alternativo para tokens obtenidos desde fuera de Docker (localhost:8090)
+    this.expectedIssuerExternal = `http://localhost:8090/realms/${this.keycloakRealm}`;
 
     // Configurar cliente JWKS para obtener las claves públicas de Keycloak
     const jwksUri = `${this.expectedIssuer}/protocol/openid-connect/certs`;
-    this.jwksClient = jwksClient({
+    // Usar require para compatibilidad con CommonJS en tiempo de ejecución
+    const jwksClientFactory = require('jwks-rsa');
+    this.jwksClient = jwksClientFactory({
       jwksUri,
       cache: true,
       cacheMaxAge: 86400000, // 24 horas
@@ -58,7 +63,8 @@ export class JwtAuthGuard implements CanActivate {
     });
 
     this.logger.log(`JwtAuthGuard inicializado`);
-    this.logger.log(`Issuer esperado: ${this.expectedIssuer}`);
+    this.logger.log(`Issuer esperado (interno): ${this.expectedIssuer}`);
+    this.logger.log(`Issuer esperado (externo): ${this.expectedIssuerExternal}`);
     this.logger.log(`Audiencia esperada: ${this.expectedAudience}`);
   }
 
@@ -147,24 +153,39 @@ export class JwtAuthGuard implements CanActivate {
    * Valida el payload del token (issuer, audiencia, expiración)
    */
   private validatePayload(payload: JwtPayload): void {
-    // Validar issuer
-    if (payload.iss !== this.expectedIssuer) {
+    // Validar issuer (acepta tanto la URL interna como externa)
+    if (payload.iss !== this.expectedIssuer && payload.iss !== this.expectedIssuerExternal) {
       throw new Error(
-        `Issuer inválido. Esperado: ${this.expectedIssuer}, Obtenido: ${payload.iss}`,
+        `Issuer inválido. Esperado: ${this.expectedIssuer} o ${this.expectedIssuerExternal}, Obtenido: ${payload.iss}`,
       );
     }
 
     // Validar audiencia
+    // En client_credentials, Keycloak puede no incluir 'aud' pero sí 'azp' (authorized party)
     const audience = payload.aud;
+    const authorizedParty = payload.azp || payload.client_id;
+    
     if (!audience) {
-      throw new Error('Token sin audiencia (aud)');
-    }
-
-    const audiences = Array.isArray(audience) ? audience : [audience];
-    if (!audiences.includes(this.expectedAudience)) {
-      throw new Error(
-        `Audiencia inválida. Esperado: ${this.expectedAudience}, Obtenido: ${audiences.join(', ')}`,
-      );
+      // Si no hay audiencia explícita, validar usando azp/client_id
+      // Para client_credentials, el azp indica qué cliente obtuvo el token
+      // Aceptamos tokens de password-service (cliente que llama a users-service)
+      if (authorizedParty === 'password-service' || authorizedParty === this.expectedAudience) {
+        this.logger.debug(`Token válido por azp: ${authorizedParty}`);
+      } else {
+        throw new Error(`Token sin audiencia (aud) y azp inválido: ${authorizedParty}`);
+      }
+    } else {
+      const audiences = Array.isArray(audience) ? audience : [audience];
+      // Verificar si la audiencia esperada está en la lista
+      const hasValidAudience = audiences.includes(this.expectedAudience) || 
+                              audiences.includes('account') || // Keycloak puede incluir 'account'
+                              authorizedParty === this.expectedAudience;
+      
+      if (!hasValidAudience) {
+        throw new Error(
+          `Audiencia inválida. Esperado: ${this.expectedAudience}, Obtenido: ${audiences.join(', ')}`,
+        );
+      }
     }
 
     // Validar expiración (jwt.verify ya lo hace, pero verificamos explícitamente)

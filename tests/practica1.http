@@ -324,7 +324,65 @@ GET {{usersBaseUrl}}/exists/1
 Content-Type: application/json
 
 ### ============================================
-### NOTAS PARA EL DOCENTE
+### RESUMEN PARA DEFENSA - PRÁCTICA #1
+### ============================================
+### 
+### Este archivo demuestra los criterios de la Práctica #1:
+### 
+### ✅ 1. SEPARACIÓN POR DOMINIO / BOUNDED CONTEXTS
+###    - Users Service: Dominio de gestión de usuarios (bounded context independiente)
+###    - Password Service: Dominio de gestión de contraseñas (bounded context independiente)
+###    - Cada microservicio tiene su propia base de datos SQLite (separación de datos)
+###    - DEMOSTRACIÓN: Ejecutar requests 2.1-2.9 (Users) y 4.1-4.14 (Password)
+###
+### ✅ 2. ALTA COHESIÓN Y BAJO ACOPLAMIENTO
+###    - Alta cohesión: Cada servicio agrupa funcionalidades relacionadas a su dominio
+###    - Bajo acoplamiento: Comunicación mediante HTTP REST, sin dependencias directas
+###    - Load Balancer: Desacopla clientes de las réplicas específicas
+###    - DEMOSTRACIÓN: 
+###      * Requests 3.1-3.3 muestran distribución por Load Balancer
+###      * Requests 4.2-4.4 muestran comunicación entre servicios (Password → Users)
+###      * Requests 4.5 y 4.9 muestran validación sin acoplamiento fuerte
+###
+### ✅ 3. COMUNICACIÓN SÍNCRONA HTTP
+###    - Password Service valida userId llamando a Users Service vía HTTP
+###    - Implementa Retry (2 reintentos) y Circuit Breaker (umbral: 5 fallos)
+###    - DEMOSTRACIÓN: Requests 4.2, 4.3, 4.5, 4.7, 4.8, 4.9
+###
+### ✅ 4. LOAD BALANCER CON RÉPLICAS
+###    - NGINX distribuye carga entre users-service-1 y users-service-2
+###    - Round-robin para balanceo de carga
+###    - DEMOSTRACIÓN: Ejecutar múltiples veces requests 3.1-3.3
+###      (observar que las respuestas pueden variar según la réplica)
+###
+### ✅ 5. INFRAESTRUCTURA COMPLETA CON DOCKER COMPOSE
+###    - Un solo comando levanta toda la infraestructura
+###    - DEMOSTRACIÓN: docker compose up --build
+###
+### ============================================
+### SECUENCIA RECOMENDADA PARA DEFENSA (3 minutos)
+### ============================================
+###
+### PASO 1 (30 seg): Demostrar separación por dominio
+###   - Ejecutar: 2.1 (crear usuario) → 4.2 (crear password)
+###   - Comentar: "Aquí vemos dos dominios independientes, cada uno con su BD"
+###
+### PASO 2 (30 seg): Demostrar Load Balancer
+###   - Ejecutar: 3.1, 3.2, 3.3 (múltiples requests al LB)
+###   - Comentar: "El Load Balancer distribuye entre 2 réplicas"
+###
+### PASO 3 (60 seg): Demostrar comunicación entre servicios
+###   - Ejecutar: 4.2 (crear password con userId válido) → 4.5 (userId inválido)
+###   - Comentar: "Password Service valida con Users Service vía HTTP síncrono"
+###   - Mostrar: Request 4.5 falla porque valida que el usuario no existe
+###
+### PASO 4 (60 seg): Demostrar arquitectura completa
+###   - Ejecutar: 1.1, 1.2 (health checks)
+###   - Comentar: "Toda la infraestructura está levantada con docker compose"
+###   - Mencionar: Retry, Circuit Breaker, bases de datos independientes
+###
+### ============================================
+### NOTAS TÉCNICAS PARA EL DOCENTE
 ### ============================================
 ###
 ### 1. SEPARACIÓN POR DOMINIO:

@@ -137,6 +137,63 @@ npm run start:dev
 
 - `IMPLEMENTACION.md` - Detalles de la Práctica #1 (Comunicación Síncrona)
 - `PRACTICA2.md` - Detalles de la Práctica #2 (Comunicación Asíncrona con Kafka)
+- `PRACTICA3.md` - Detalles de la Práctica #3 (Autenticación Servicio a Servicio)
 - `MIGRACION_BASE_DATOS.md` - Migración de bases de datos compartidas
 - `tests/practica1.http` - Archivo de pruebas REST Client para Práctica #1
+- `tests/practica2.http` - Archivo de pruebas REST Client para Práctica #2
+- `tests/practica3.http` - Archivo de pruebas REST Client para Práctica #3
+
+---
+
+## ⚙️ Pruebas con REST Client para Defensa
+
+### Requisitos
+
+1. **VS Code** con la extensión **REST Client** (`humao.rest-client`)
+2. **Docker Compose** instalado y funcionando
+
+### Inicio Rápido para Defensa
+
+```bash
+# 1. Levantar toda la infraestructura
+docker compose up --build
+
+# 2. Esperar a que todos los servicios estén healthy
+docker compose ps
+
+# 3. Abrir VS Code en la carpeta del proyecto
+code .
+```
+
+### Archivos de Prueba
+
+Abrir en VS Code y ejecutar los requests con el botón "Send Request":
+
+- **`tests/practica1.http`**: Demuestra separación por dominio, Load Balancer, comunicación síncrona HTTP
+- **`tests/practica2.http`**: Demuestra comunicación asíncrona con Kafka, eventual consistency
+- **`tests/practica3.http`**: Demuestra autenticación servicio a servicio con OAuth2/Keycloak
+
+### Secuencia Recomendada para Defensa (3 minutos)
+
+#### 1. Práctica #1 - Arquitectura (30 seg)
+- Ejecutar: `practica1.http` → Request 2.1 (crear usuario) → Request 4.2 (crear password)
+- **Comentar**: "Separación por dominio, cada servicio con su BD independiente"
+
+#### 2. Práctica #2 - Kafka (30 seg)
+- Ejecutar: `practica2.http` → Request 2.1 (cache vacío) → Request 3.1 (crear usuario) → Esperar 2-3 seg → Request 3.2 (cache actualizado)
+- **Comentar**: "Kafka permite comunicación asíncrona, eventual consistency"
+
+#### 3. Práctica #3 - Autenticación (2 min)
+- Ejecutar: `practica3.http` → Request 4.1 (sin token → 401) → Request 2.1 (obtener token) → Request 4.4 (con token → 200) → Request 5.3 (flujo completo)
+- **Comentar**: "Autenticación servicio a servicio con OAuth2, Zero Trust Architecture"
+
+### Documentación Detallada
+
+Para instrucciones detalladas sobre cómo usar REST Client en la defensa, ver:
+- **`PRACTICA3.md`** - Sección "⚙️ Pruebas con REST Client para Defensa"
+
+Cada archivo `.http` incluye:
+- ✅ Comentarios explicativos sobre qué demuestra cada request
+- ✅ Sección "RESUMEN PARA DEFENSA" con secuencia recomendada
+- ✅ Variables de entorno para facilitar las pruebas
 
