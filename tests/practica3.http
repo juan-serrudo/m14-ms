@@ -35,10 +35,19 @@
 
 ### 2.1. Obtener token para password-service (cliente)
 ### Este es el flujo client_credentials que usa password-service internamente
+### TROUBLESHOOTING: Si obtienes error 401 "unauthorized_client", prueba la versión 2.1.alt abajo
+### El problema puede ser que las variables no se están expandiendo correctamente en REST Client
 POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+### 2.1.alt. Versión alternativa con valores hardcodeados (para debugging)
+### Descomenta esta versión si la 2.1 no funciona (quita los # al inicio de cada línea)
+### POST http://localhost:8090/realms/microservices-realm/protocol/openid-connect/token
+### Content-Type: application/x-www-form-urlencoded
+### 
+### grant_type=client_credentials&client_id=password-service&client_secret=password-service-secret-12345
 
 > {%
     // Guardar el token en la variable para uso posterior
@@ -56,13 +65,17 @@ grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{c
 POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id={{client_id_users}}&client_secret={{client_secret_users}}
+grant_type=client_credentials
+&client_id={{client_id_users}}
+&client_secret={{client_secret_users}}
 
 ### 2.3. Intentar obtener token con credenciales inválidas (debe fallar)
 POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id={{client_id_password}}&client_secret=secret-incorrecto
+grant_type=client_credentials
+&client_id={{client_id_password}}
+&client_secret=secret-incorrecto
 
 ### ============================================
 ### 3. VERIFICACIÓN DE HEALTH CHECKS
@@ -91,7 +104,9 @@ Authorization: Bearer token-invalido-12345
 POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+grant_type=client_credentials
+&client_id={{client_id_password}}
+&client_secret={{client_secret_password}}
 
 > {%
     if (response.status === 200) {
@@ -141,7 +156,9 @@ Content-Type: application/json
 POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+grant_type=client_credentials
+&client_id={{client_id_password}}
+&client_secret={{client_secret_password}}
 
 > {%
     if (response.status === 200) {
@@ -180,7 +197,9 @@ GET {{password_service_url}}/api/password-manager
 POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+grant_type=client_credentials
+&client_id={{client_id_password}}
+&client_secret={{client_secret_password}}
 
 > {%
     if (response.status === 200) {
@@ -224,7 +243,9 @@ GET {{users_service_url}}/api/users
 POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+grant_type=client_credentials
+&client_id={{client_id_password}}
+&client_secret={{client_secret_password}}
 
 > {%
     if (response.status === 200) {
