@@ -1,0 +1,241 @@
+### ============================================
+### PRÁCTICA #2 - COMUNICACIÓN ASÍNCRONA CON KAFKA
+### Sistema de Pruebas con REST Client (VS Code)
+### ============================================
+### 
+### Este archivo demuestra el cumplimiento de la Práctica #2:
+### - Comunicación asíncrona con Apache Kafka
+### - Event-Driven Architecture (EDA)
+### - Eventual Consistency
+### - Kafka Producer (users-service)
+### - Kafka Consumer (password-service)
+### - Cache local mantenido mediante eventos
+###
+### Requisitos:
+### 1. Ejecutar: docker compose up -d (desde la raíz)
+### 2. Instalar extensión REST Client en VS Code
+### 3. Hacer clic en "Send Request" sobre cada request
+### 4. Ejecutar los requests en orden para ver el flujo completo
+### ============================================
+
+### Variables globales
+@usersBaseUrl = http://localhost:8080/api/users
+@usersService1Url = http://localhost:3001/api/users
+@usersService2Url = http://localhost:3002/api/users
+@passwordBaseUrl = http://localhost:3000/api/password-manager
+@passwordHealthUrl = http://localhost:3000/api/health
+@usersHealthUrl = http://localhost:8080/api/health
+@userCacheBaseUrl = http://localhost:3000/api/user-cache
+
+### ============================================
+### 1. HEALTH CHECKS
+### Verificar que todos los servicios están funcionando
+### ============================================
+
+### Health Check - Password Service
+GET {{passwordHealthUrl}}
+Content-Type: application/json
+
+### Health Check - Users Service (Load Balancer)
+GET {{usersHealthUrl}}
+Content-Type: application/json
+
+### ============================================
+### 2. VERIFICAR ESTADO INICIAL DEL CACHE
+### El cache local de usuarios debe estar vacío inicialmente
+### ============================================
+
+### Obtener estadísticas del cache de usuarios (debe estar vacío)
+GET {{userCacheBaseUrl}}/stats
+Content-Type: application/json
+
+### Listar usuarios en cache (debe retornar array vacío)
+GET {{userCacheBaseUrl}}/users
+Content-Type: application/json
+
+### ============================================
+### 3. DEMOSTRACIÓN: KAFKA PRODUCER (users-service)
+### Al crear/actualizar/eliminar usuarios, se publican eventos en Kafka
+### ============================================
+
+### 3.1. Crear Usuario 1 - Esto publicará un evento USER_CREATED en Kafka
+POST {{usersBaseUrl}}
+Content-Type: application/json
+
+{
+  "email": "maria.garcia@example.com",
+  "name": "María García",
+  "status": "active"
+}
+
+### 3.2. Verificar que el usuario fue creado en users-service
+### Espera unos segundos y luego verifica el cache en password-service
+### El evento USER_CREATED debe haber sido consumido y el usuario debe aparecer en el cache
+
+### Esperar 2-3 segundos para que el evento de Kafka se procese...
+
+### Verificar que el usuario aparece en el cache local (eventual consistency)
+GET {{userCacheBaseUrl}}/stats
+Content-Type: application/json
+
+### Listar usuarios en cache (debe incluir el usuario recién creado)
+GET {{userCacheBaseUrl}}/users
+Content-Type: application/json
+
+### 3.3. Crear Usuario 2 - Otro evento USER_CREATED
+POST {{usersBaseUrl}}
+Content-Type: application/json
+
+{
+  "email": "carlos.rodriguez@example.com",
+  "name": "Carlos Rodríguez",
+  "status": "active"
+}
+
+### Esperar 2-3 segundos...
+
+### Verificar que ahora hay 2 usuarios en el cache
+GET {{userCacheBaseUrl}}/stats
+Content-Type: application/json
+
+### 3.4. Actualizar Usuario 1 - Esto publicará un evento USER_UPDATED en Kafka
+### Primero necesitamos obtener el ID del usuario creado
+### (Asumimos que el ID es 1, ajusta según la respuesta anterior)
+
+PUT {{usersBaseUrl}}/1
+Content-Type: application/json
+
+{
+  "name": "María García López",
+  "status": "inactive"
+}
+
+### Esperar 2-3 segundos...
+
+### Verificar que el usuario fue actualizado en el cache
+GET {{userCacheBaseUrl}}/users
+Content-Type: application/json
+
+### ============================================
+### 4. DEMOSTRACIÓN: EVENTUAL CONSISTENCY
+### password-service usa el cache local (de Kafka) para validar usuarios
+### Si el usuario no está en cache, hace fallback a HTTP síncrono
+### ============================================
+
+### 4.1. Crear Password para Usuario 1 (debe usar cache local)
+### El usuario 1 ya está en el cache gracias a Kafka, así que
+### password-service NO necesita hacer llamada HTTP síncrona
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "site": "github.com",
+  "username": "maria.garcia",
+  "password": "miPassword123",
+  "category": "Desarrollo",
+  "masterKey": "claveMaestra123"
+}
+
+### 4.2. Verificar que la password fue creada
+GET {{passwordBaseUrl}}/user/1
+Content-Type: application/json
+
+### 4.3. Crear Password para Usuario 2 (también usa cache local)
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "userId": 2,
+  "site": "gmail.com",
+  "username": "carlos.rodriguez",
+  "password": "otraPassword456",
+  "category": "Email",
+  "masterKey": "claveMaestra123"
+}
+
+### ============================================
+### 5. DEMOSTRACIÓN: EVENTO USER_DELETED
+### Al eliminar un usuario, se publica evento USER_DELETED
+### ============================================
+
+### 5.1. Verificar estado actual del cache (debe tener 2 usuarios)
+GET {{userCacheBaseUrl}}/stats
+Content-Type: application/json
+
+### 5.2. Eliminar Usuario 2 - Esto publicará un evento USER_DELETED en Kafka
+DELETE {{usersBaseUrl}}/2
+Content-Type: application/json
+
+### Esperar 2-3 segundos...
+
+### 5.3. Verificar que el usuario fue eliminado del cache
+GET {{userCacheBaseUrl}}/stats
+Content-Type: application/json
+
+### Listar usuarios en cache (debe tener solo 1 usuario ahora)
+GET {{userCacheBaseUrl}}/users
+Content-Type: application/json
+
+### ============================================
+### 6. DEMOSTRACIÓN: FALLBACK HTTP SÍNCRONO
+### Si un usuario no está en cache, password-service hace fallback
+### a validación HTTP síncrona (comportamiento híbrido)
+### ============================================
+
+### 6.1. Intentar crear password para un usuario que NO existe
+### Esto demostrará el fallback a HTTP síncrono
+POST {{passwordBaseUrl}}
+Content-Type: application/json
+
+{
+  "userId": 999,
+  "site": "test.com",
+  "username": "usuario.inexistente",
+  "password": "password123",
+  "category": "Test",
+  "masterKey": "claveMaestra123"
+}
+
+### Debe retornar error 404 porque el usuario no existe
+### (password-service validó vía HTTP síncrono como fallback)
+
+### ============================================
+### 7. VERIFICACIÓN FINAL DEL ESTADO DEL SISTEMA
+### ============================================
+
+### Estado final del cache de usuarios
+GET {{userCacheBaseUrl}}/stats
+Content-Type: application/json
+
+### Listar todos los usuarios en users-service
+GET {{usersBaseUrl}}
+Content-Type: application/json
+
+### Listar todas las passwords creadas
+GET {{passwordBaseUrl}}
+Content-Type: application/json
+
+### ============================================
+### RESUMEN DE LA DEMOSTRACIÓN
+### ============================================
+###
+### ✅ Health checks funcionando
+### ✅ Comunicación HTTP síncrona (Práctica #1) sigue funcionando
+### ✅ Kafka Producer: users-service publica eventos (USER_CREATED, USER_UPDATED, USER_DELETED)
+### ✅ Kafka Consumer: password-service consume eventos y actualiza cache local
+### ✅ Eventual Consistency: cache local se actualiza mediante eventos de Kafka
+### ✅ Patrón híbrido: cache local + fallback HTTP síncrono
+### ✅ Event-Driven Architecture: flujo asíncrono complementa comunicación síncrona
+###
+### NOTAS:
+### - Los eventos de Kafka pueden tardar 1-3 segundos en procesarse
+### - El cache local demuestra eventual consistency (no es inmediato)
+### - Si Kafka no está disponible, password-service usa HTTP síncrono como fallback
+### - Los logs de los servicios mostrarán la publicación/consumo de eventos
+###
+### Para ver los logs de Kafka:
+### docker compose logs users-service-1 | grep Kafka
+### docker compose logs password-service | grep Kafka
+### ============================================
+
