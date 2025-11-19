@@ -1,0 +1,334 @@
+### ============================================
+### DEFENSA FINAL - MÓDULO MICROSERVICIOS
+### Guion de Pruebas con REST Client (humao.rest-client)
+### ============================================
+### 
+### Este archivo demuestra el cumplimiento de los 5 criterios de evaluación:
+### 1. Infraestructura preconfigurada y funcional
+### 2. Microservicios definidos por dominio / bounded contexts
+### 3. Arquitectura con alta cohesión y bajo acoplamiento
+### 4. Mecanismo de autenticación servicio a servicio
+### 5. Análisis de trade-offs
+###
+### Requisitos:
+### 1. Ejecutar: docker compose up --build (desde la raíz)
+### 2. Instalar extensión REST Client en VS Code
+### 3. Ejecutar requests en orden para la demostración
+### ============================================
+
+### ============================================
+### VARIABLES GLOBALES
+### ============================================
+
+@keycloak_url = http://localhost:8090
+@realm = microservices-realm
+@users_service_url = http://localhost:8080
+@password_service_url = http://localhost:3000
+@client_id_password = password-service
+@client_secret_password = password-service-secret-12345
+
+### IMPORTANTE: Variable para el token de acceso
+### INSTRUCCIONES:
+### 1. Ejecuta el request 2.1 o 4.2 para obtener el token
+### 2. Copia el valor de "access_token" de la respuesta JSON
+### 3. Pega ese valor aquí (reemplaza esta línea con: @access_token = tu_token_aqui)
+@access_token = eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJqU1ZsM3lIZ3NhVGNBWW9uTGUtem9rZ0pha25wbzVjYTRNSkFoY045ZVNvIn0.eyJleHAiOjE3NjM1ODkxMjgsImlhdCI6MTc2MzU4ODgyOCwianRpIjoiNzViNWIxMzEtMTRiMy00YmIxLWI2ZjctNGM3NWIwMWY2YmVmIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDkwL3JlYWxtcy9taWNyb3NlcnZpY2VzLXJlYWxtIiwic3ViIjoiZTY5MTdhYTYtMWY1Zi00N2QxLWI5ODQtZTE3MmFjOGI0MWY4IiwidHlwIjoiQmVhcmVyIiwiYXpwIjoicGFzc3dvcmQtc2VydmljZSIsInNjb3BlIjoiIiwiY2xpZW50SG9zdCI6IjE3Mi4yMC4wLjEiLCJjbGllbnRBZGRyZXNzIjoiMTcyLjIwLjAuMSIsImNsaWVudF9pZCI6InBhc3N3b3JkLXNlcnZpY2UifQ.SFKOdRMEFPMldUYUTHo6rZdXPd8vMZROaEUVB-uDTSjdAvlNEs9g1Jm0IzjZwyrki-A-QJv5Z3QEUKeruTLzH4fDNcmdBqgDBhDXjxWER3i6cyod-wyFcVK9bHT-pQA0CES5wXg78cA_QIa-PbYzJrPFSY9Fr2C9TpUE2ofwpSNibOihoEuqemsgr3A3iuj3UouzRLRYaur0ImtY15Iv-5AMSaHJOlPugYfGRAVGD5348dikpMngPSKndlNKZJo8yPVo6k_Bx_9uQrMtWHk7rcgdf681SCaVFLjvfguNApFULWZFU8KImyu5Jx_3I1_dnpRcMnLN_f1bOL2-BBozLw
+
+### ============================================
+### CRITERIO 1: INFRAESTRUCTURA PRECONFIGURADA Y FUNCIONAL
+### ============================================
+### Demuestra que toda la infraestructura se levanta con un solo comando
+### y todos los servicios están operativos
+
+### 1.1. Health Check - Keycloak (OAuth2/SSO)
+GET {{keycloak_url}}/realms/{{realm}}
+Accept: application/json
+
+### 1.2. Health Check - Users Service (Load Balancer)
+GET {{users_service_url}}/api/health
+Accept: application/json
+
+### 1.3. Health Check - Password Service
+GET {{password_service_url}}/api/health
+Accept: application/json
+
+### 1.4. Verificar JWKS de Keycloak (claves públicas para validación JWT)
+GET {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/certs
+Accept: application/json
+
+### ============================================
+### CRITERIO 2: MICROSERVICIOS DEFINIDOS POR DOMINIO / BOUNDED CONTEXTS
+### ============================================
+### Demuestra separación clara de dominios:
+### - Users Service: Dominio de gestión de usuarios
+### - Password Service: Dominio de gestión de contraseñas
+### Cada uno con su propia base de datos independiente
+
+### 2.1. Obtener token para autenticación (necesario para Users Service)
+### INSTRUCCIONES: 
+### 1. Ejecuta este request (debe devolver 200 OK con un JSON que contiene "access_token")
+### 2. En la respuesta JSON, copia el valor de "access_token" (es un string largo)
+### 3. Ve a la línea 29 (arriba en VARIABLES GLOBALES) y pega el token: @access_token = tu_token_aqui
+### ALTERNATIVA: Ejecuta el request 4.2 que intenta guardar el token automáticamente con un script
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+### 2.2. DOMINIO USERS: Crear usuario (bounded context independiente)
+POST {{users_service_url}}/api/users
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "email": "demo@example.com",
+  "name": "Usuario Demo",
+  "status": "active"
+}
+
+### 2.3. DOMINIO USERS: Listar usuarios (base de datos SQLite propia)
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token}}
+
+### 2.4. DOMINIO PASSWORD: Crear contraseña (bounded context independiente)
+### Nota: Valida automáticamente que el usuario existe llamando a Users Service
+POST {{password_service_url}}/api/password-manager
+Content-Type: application/json
+
+{
+  "title": "Gmail Personal",
+  "description": "Cuenta principal de Gmail",
+  "username": "demo@gmail.com",
+  "password": "miPasswordSegura123!",
+  "url": "https://gmail.com",
+  "category": "Email",
+  "notes": "Cuenta de demostración",
+  "masterKey": "miClaveMaestra123!",
+  "userId": 1
+}
+
+### 2.5. DOMINIO PASSWORD: Listar contraseñas (base de datos SQLite propia)
+GET {{password_service_url}}/api/password-manager
+
+### 2.6. DOMINIO PASSWORD: Obtener contraseñas por usuario
+GET {{password_service_url}}/api/password-manager/user/1
+
+### ============================================
+### CRITERIO 3: ARQUITECTURA CON ALTA COHESIÓN Y BAJO ACOPLAMIENTO
+### ============================================
+### Demuestra:
+### - Alta cohesión: Cada servicio agrupa funcionalidades relacionadas a su dominio
+### - Bajo acoplamiento: Comunicación mediante HTTP REST, sin dependencias directas
+### - Load Balancer: Desacopla clientes de réplicas específicas
+### - Resiliencia: Retry y Circuit Breaker en comunicación entre servicios
+
+### 3.1. ALTA COHESIÓN: Users Service agrupa todas las operaciones de usuarios
+GET {{users_service_url}}/api/users/1
+Authorization: Bearer {{access_token}}
+
+### 3.2. ALTA COHESIÓN: Password Service agrupa todas las operaciones de contraseñas
+GET {{password_service_url}}/api/password-manager/1
+
+### 3.3. BAJO ACOPLAMIENTO: Load Balancer distribuye entre réplicas (round-robin)
+### Ejecutar múltiples veces para ver distribución
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token}}
+
+### 3.4. BAJO ACOPLAMIENTO: Password Service valida usuario vía HTTP (sin dependencia directa)
+### Si el usuario no existe, la validación falla sin afectar la integridad del servicio
+POST {{password_service_url}}/api/password-manager
+Content-Type: application/json
+
+{
+  "title": "Test Fail",
+  "description": "Esta debería fallar - usuario inexistente",
+  "username": "test@example.com",
+  "password": "test123",
+  "url": "https://test.com",
+  "category": "Test",
+  "masterKey": "test123",
+  "userId": 999
+}
+
+### 3.5. RESILIENCIA: Verificar que el servicio responde correctamente después de validación
+GET {{password_service_url}}/api/password-manager
+
+### ============================================
+### CRITERIO 4: MECANISMO DE AUTENTICACIÓN SERVICIO A SERVICIO
+### ============================================
+### Demuestra autenticación OAuth2/Keycloak entre microservicios:
+### - password-service obtiene token desde Keycloak (client_credentials)
+### - password-service incluye token en llamadas a users-service
+### - users-service valida token usando JWKS de Keycloak
+### - Zero Trust: Sin token, el servicio rechaza (401)
+
+### 4.1. SIN AUTENTICACIÓN: Intentar acceder a Users Service sin token (debe fallar)
+GET {{users_service_url}}/api/users
+### Esperado: 401 Unauthorized - Demuestra Zero Trust Architecture
+
+### 4.2. OBTENER TOKEN: password-service obtiene token desde Keycloak
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
+
+> {%
+    // Guardar el token en la variable para uso posterior
+    if (response.status === 200) {
+        client.global.set("access_token", response.body.access_token);
+        client.log("✅ Token obtenido para password-service");
+        client.log("⏱️  Expira en: " + response.body.expires_in + " segundos");
+    } else {
+        client.log("❌ Error al obtener token: " + response.status);
+        client.log("Respuesta: " + JSON.stringify(response.body));
+    }
+%}
+
+### 4.3. CON AUTENTICACIÓN: Acceder a Users Service con token válido (debe funcionar)
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token}}
+### Esperado: 200 OK - Demuestra validación exitosa de JWT
+
+### 4.4. FLUJO COMPLETO: password-service → users-service con autenticación automática
+### password-service obtiene token internamente y lo incluye en la llamada
+POST {{password_service_url}}/api/password-manager
+Content-Type: application/json
+
+{
+  "title": "GitHub",
+  "description": "Cuenta de GitHub",
+  "username": "demo@github.com",
+  "password": "githubPass456!",
+  "url": "https://github.com",
+  "category": "Desarrollo",
+  "masterKey": "miClaveMaestra123!",
+  "userId": 1
+}
+### Nota: Internamente, password-service:
+### 1. Obtiene token desde Keycloak (OAuth2Service)
+### 2. Valida usuario llamando a users-service con Bearer token
+### 3. users-service valida token (JwtAuthGuard) usando JWKS
+
+### 4.5. VALIDACIÓN DE FIRMA: Verificar que tokens manipulados son rechazados
+GET {{users_service_url}}/api/users
+Authorization: Bearer token-manipulado-invalido-12345
+### Esperado: 401 Unauthorized - Demuestra validación de firma JWT
+
+### 4.6. VERIFICAR USUARIO: Endpoint que password-service usa para validar usuarios
+GET {{users_service_url}}/api/users/exists/1
+Authorization: Bearer {{access_token}}
+
+### ============================================
+### CRITERIO 5: ANÁLISIS DE TRADE-OFFS
+### ============================================
+### Demuestra comprensión de ventajas y desventajas de la solución
+
+### 5.1. VENTAJA: Separación de datos permite escalado independiente
+### Cada servicio puede escalar su base de datos según necesidad
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token}}
+
+###
+GET {{password_service_url}}/api/password-manager
+
+### 5.2. VENTAJA: Load Balancer permite alta disponibilidad
+### Si una réplica falla, el Load Balancer distribuye a la otra
+GET {{users_service_url}}/api/users
+Authorization: Bearer {{access_token}}
+
+### 5.3. DESVENTAJA: Comunicación síncrona HTTP puede crear latencia
+### Demostración: password-service debe esperar respuesta de users-service
+POST {{password_service_url}}/api/password-manager
+Content-Type: application/json
+
+{
+  "title": "Netflix",
+  "description": "Cuenta de streaming",
+  "username": "demo@netflix.com",
+  "password": "netflixPass789!",
+  "url": "https://netflix.com",
+  "category": "Entretenimiento",
+  "masterKey": "miClaveMaestra123!",
+  "userId": 1
+}
+
+### 5.4. VENTAJA: Autenticación centralizada con Keycloak
+### Un solo punto de gestión de tokens y políticas de seguridad
+GET {{keycloak_url}}/realms/{{realm}}
+Accept: application/json
+
+### 5.5. DESVENTAJA: Dependencia de Keycloak (single point of failure)
+### Si Keycloak cae, los servicios no pueden autenticarse
+### Mitigación: Keycloak con base de datos PostgreSQL persistente
+
+### ============================================
+### SECUENCIA RECOMENDADA PARA DEFENSA (3 minutos)
+### ============================================
+###
+### PASO 1 (30 seg): Criterio 1 - Infraestructura
+###   - Ejecutar: 1.1, 1.2, 1.3 (health checks)
+###   - Comentar: "Toda la infraestructura se levanta con docker compose up --build"
+###
+### PASO 2 (30 seg): Criterio 2 - Bounded Contexts
+###   - Ejecutar: 2.2 (crear usuario) → 2.4 (crear password)
+###   - Comentar: "Dos dominios independientes, cada uno con su BD SQLite"
+###
+### PASO 3 (30 seg): Criterio 3 - Cohesión y Acoplamiento
+###   - Ejecutar: 3.3 (múltiples requests al LB)
+###   - Comentar: "Load Balancer distribuye carga, alta cohesión por dominio"
+###
+### PASO 4 (60 seg): Criterio 4 - Autenticación Servicio a Servicio
+###   - Ejecutar: 4.1 (sin token → 401) → 4.2 (obtener token) → 4.3 (con token → 200)
+###   - Comentar: "Zero Trust: sin token se rechaza. Con token válido, funciona."
+###   - Ejecutar: 4.4 (flujo completo)
+###   - Comentar: "password-service obtiene token automáticamente y valida con users-service"
+###
+### PASO 5 (30 seg): Criterio 5 - Trade-offs
+###   - Comentar: "Ventajas: escalado independiente, alta disponibilidad con LB"
+###   - Comentar: "Desventajas: latencia en comunicación síncrona, dependencia de Keycloak"
+###
+### ============================================
+### NOTAS TÉCNICAS PARA EL DOCENTE
+### ============================================
+###
+### 1. INFRAESTRUCTURA:
+###    - Docker Compose levanta: Keycloak, PostgreSQL, Kafka, Zookeeper,
+###      Users Service (2 réplicas), Load Balancer NGINX, Password Service
+###    - Un solo comando: docker compose up --build
+###
+### 2. BOUNDED CONTEXTS:
+###    - Users Service: Dominio de usuarios (BD: users.sqlite)
+###    - Password Service: Dominio de contraseñas (BD: password.sqlite)
+###    - Separación completa de datos y lógica de negocio
+###
+### 3. COHESIÓN Y ACOPLAMIENTO:
+###    - Alta cohesión: Cada servicio agrupa funcionalidades de su dominio
+###    - Bajo acoplamiento: Comunicación HTTP REST, sin dependencias directas
+###    - Load Balancer: Desacopla clientes de réplicas específicas
+###    - Resiliencia: Retry (2 intentos) y Circuit Breaker (umbral: 5 fallos)
+###
+### 4. AUTENTICACIÓN SERVICIO A SERVICIO:
+###    - Flujo: password-service → OAuth2Service → Keycloak → users-service
+###    - password-service obtiene token con client_credentials
+###    - password-service incluye token en Authorization: Bearer <token>
+###    - users-service valida token usando JWKS de Keycloak
+###    - Validación: firma, issuer, audiencia, expiración
+###    - Zero Trust: Sin token → 401 Unauthorized
+###
+### 5. TRADE-OFFS:
+###    VENTAJAS:
+###    - Escalado independiente por servicio
+###    - Alta disponibilidad con Load Balancer y réplicas
+###    - Separación de responsabilidades (SRP)
+###    - Tecnologías independientes por servicio
+###    - Autenticación centralizada con Keycloak
+###
+###    DESVENTAJAS:
+###    - Latencia en comunicación síncrona HTTP
+###    - Complejidad operativa (múltiples servicios)
+###    - Dependencia de Keycloak (single point of failure)
+###    - Necesidad de gestión de transacciones distribuidas
+###    - Overhead de red en cada comunicación
+###
+### ============================================
+
