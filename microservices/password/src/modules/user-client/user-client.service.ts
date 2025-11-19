@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, timeout, retry, catchError, throwError } from 'rxjs';
+import { OAuth2Service } from '../oauth2/oauth2.service';
 
 /**
  * Circuit Breaker Implementation
@@ -28,6 +29,7 @@ export class UserClientService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly oauth2Service: OAuth2Service,
   ) {
     this.userServiceBaseUrl = this.configService.get<string>('USER_SERVICE_BASE_URL') || 'http://users-service-lb';
   }
@@ -91,10 +93,18 @@ export class UserClientService {
     const url = `${this.userServiceBaseUrl}/api/users/exists/${userId}`;
 
     try {
+      // Obtener token de acceso desde Keycloak (OAuth2 client_credentials)
+      const accessToken = await this.oauth2Service.getAccessToken();
+      
       // PATRÓN RETRY: timeout de 2 segundos y retry de 2 intentos
       // Si falla después de los retries, se lanza el error
+      // AUTENTICACIÓN: Incluir token Bearer en la cabecera Authorization
       const response = await firstValueFrom(
-        this.httpService.get(url).pipe(
+        this.httpService.get(url, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }).pipe(
           timeout(2000), // Timeout de 2 segundos
           retry({
             count: 2, // 2 reintentos adicionales (total 3 intentos)

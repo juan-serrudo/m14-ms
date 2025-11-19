@@ -8,6 +8,9 @@ import { UserService } from './modules/user/user.service';
 import { databaseProviders } from './providers/database.providers';
 import { userProviders } from './providers/user.providers';
 import { KafkaModule } from './modules/kafka/kafka.module';
+import { JwtAuthModule } from './guards/jwt-auth.module';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -17,6 +20,7 @@ import { KafkaModule } from './modules/kafka/kafka.module';
       isGlobal: true
     }),
     KafkaModule,
+    JwtAuthModule,
   ],
   controllers: [
     AppController,
@@ -27,6 +31,10 @@ import { KafkaModule } from './modules/kafka/kafka.module';
     UserService,
     ...databaseProviders,
     ...userProviders,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
   ],
   exports: [
     ...databaseProviders,

@@ -10,6 +10,7 @@ import { passwordManagerProviders } from './providers/password-manager.providers
 import { UserClientModule } from './modules/user-client/user-client.module';
 import { KafkaModule } from './modules/kafka/kafka.module';
 import { UserCacheModule } from './modules/user-cache/user-cache.module';
+import { OAuth2Module } from './modules/oauth2/oauth2.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UserCacheModule } from './modules/user-cache/user-cache.module';
     UserClientModule,
     KafkaModule,
     UserCacheModule,
+    OAuth2Module,
   ],
   controllers: [
     AppController,
