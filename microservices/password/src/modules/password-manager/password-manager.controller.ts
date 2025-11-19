@@ -38,6 +38,16 @@ export class PasswordManagerController {
     return this.passwordManagerService.findByCategory(category);
   }
 
+  @Get('/user/:userId')
+  @ApiOperation({
+    summary: 'Obtener entradas por usuario',
+    description: 'Retorna todas las entradas de contraseñas de un usuario específico'
+  })
+  @ApiParam({ name: 'userId', description: 'ID del usuario', type: 'number' })
+  async findByUserId(@Param('userId') userId: number): Promise<ResponseDTO> {
+    return this.passwordManagerService.findByUserId(userId);
+  }
+
   @Post('/')
   @ApiOperation({
     summary: 'Crear nueva entrada de contraseña',

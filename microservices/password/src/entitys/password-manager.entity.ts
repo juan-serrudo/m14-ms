@@ -40,4 +40,7 @@ export class PasswordManager {
 
   @Column({ type: 'varchar', length: 500 })
   masterKeyHash: string;
+
+  @Column({ type: 'int', nullable: false })
+  userId: number;
 }

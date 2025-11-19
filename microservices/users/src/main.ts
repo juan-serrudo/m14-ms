@@ -49,9 +49,10 @@ async function bootstrap() {
 
   if (envService.get('ENV_SWAGGER_SHOW')) configSwagger(app, packageJson);
 
-  const port = envService.get<number>('port') || 3000;
+  const port = envService.get<number>('port') || 3001;
   await app.listen(port, '0.0.0.0').then(async () => {
-    console.log(bold.blue('🚀 API is listening ON PORT', (await app.getUrl()) + '/api'));
+    console.log(bold.blue('🚀 Users API is listening ON PORT', (await app.getUrl()) + '/api'));
   });
 }
 bootstrap();
+

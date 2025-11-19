@@ -3,11 +3,10 @@ import { ConfigModule } from '@nestjs/config';
 import configuration from './configurations/configuration';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PasswordManagerController } from './modules/password-manager/password-manager.controller';
-import { PasswordManagerService } from './modules/password-manager/password-manager.service';
+import { UserController } from './modules/user/user.controller';
+import { UserService } from './modules/user/user.service';
 import { databaseProviders } from './providers/database.providers';
-import { passwordManagerProviders } from './providers/password-manager.providers';
-import { UserClientModule } from './modules/user-client/user-client.module';
+import { userProviders } from './providers/user.providers';
 
 @Module({
   imports: [
@@ -16,22 +15,21 @@ import { UserClientModule } from './modules/user-client/user-client.module';
       expandVariables: true,
       isGlobal: true
     }),
-    UserClientModule,
   ],
   controllers: [
     AppController,
-    PasswordManagerController,
+    UserController,
   ],
   providers: [
     AppService,
-    PasswordManagerService,
+    UserService,
     ...databaseProviders,
-    ...passwordManagerProviders,
+    ...userProviders,
   ],
   exports: [
     ...databaseProviders,
-    ...passwordManagerProviders,
+    ...userProviders,
   ],
 })
-
 export class AppModule {}
+

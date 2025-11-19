@@ -5,6 +5,7 @@ import { PasswordManager } from 'src/entitys/password-manager.entity';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as CryptoJS from 'crypto-js';
+import { UserClientService } from '../user-client/user-client.service';
 
 @Injectable()
 export class PasswordManagerService {
@@ -13,6 +14,7 @@ export class PasswordManagerService {
   constructor(
     @Inject('PASSWORD_MANAGER_REPOSITORY')
     private passwordManagerRepository: Repository<PasswordManager>,
+    private readonly userClientService: UserClientService,
   ) {}
 
   // Método para cifrar contraseña usando AES
@@ -47,7 +49,7 @@ export class PasswordManagerService {
 
     try {
       const passwords = await this.passwordManagerRepository.find({
-        select: ['id', 'title', 'description', 'username', 'url', 'category', 'notes', 'createdAt', 'updateAt']
+        select: ['id', 'title', 'description', 'username', 'url', 'category', 'notes', 'createdAt', 'updateAt', 'userId']
       });
 
       response.error = false;
@@ -76,7 +78,7 @@ export class PasswordManagerService {
     try {
       const password = await this.passwordManagerRepository.findOne({
         where: { id },
-        select: ['id', 'title', 'description', 'username', 'url', 'category', 'notes', 'createdAt', 'updateAt']
+        select: ['id', 'title', 'description', 'username', 'url', 'category', 'notes', 'createdAt', 'updateAt', 'userId']
       });
 
       if (!password) {
@@ -111,6 +113,16 @@ export class PasswordManagerService {
     };
 
     try {
+      // Validar que el usuario existe usando el cliente HTTP con Retry y Circuit Breaker
+      const userExists = await this.userClientService.userExists(passwordData.userId);
+      if (!userExists) {
+        response.error = true;
+        response.message = `El usuario con ID ${passwordData.userId} no existe.`;
+        response.response = [];
+        response.status = 404;
+        return response;
+      }
+
       // Cifrar la contraseña
       const encryptedPassword = this.encryptPassword(passwordData.password, passwordData.masterKey);
       
@@ -125,7 +137,8 @@ export class PasswordManagerService {
         url: passwordData.url || '',
         category: passwordData.category,
         notes: passwordData.notes || '',
-        masterKeyHash: masterKeyHash
+        masterKeyHash: masterKeyHash,
+        userId: passwordData.userId
       });
 
       const savedPassword = await this.passwordManagerRepository.save(newPassword);
@@ -178,6 +191,19 @@ export class PasswordManagerService {
         return response;
       }
 
+      // Si se actualiza el userId, validar que el nuevo usuario existe
+      const userIdToValidate = passwordData.userId !== undefined ? passwordData.userId : existingPassword.userId;
+      if (passwordData.userId !== undefined && passwordData.userId !== existingPassword.userId) {
+        const userExists = await this.userClientService.userExists(passwordData.userId);
+        if (!userExists) {
+          response.error = true;
+          response.message = `El usuario con ID ${passwordData.userId} no existe.`;
+          response.response = [];
+          response.status = 404;
+          return response;
+        }
+      }
+
       const updateData: any = {};
 
       if (passwordData.title !== undefined) updateData.title = passwordData.title;
@@ -186,6 +212,7 @@ export class PasswordManagerService {
       if (passwordData.url !== undefined) updateData.url = passwordData.url;
       if (passwordData.category !== undefined) updateData.category = passwordData.category;
       if (passwordData.notes !== undefined) updateData.notes = passwordData.notes;
+      if (passwordData.userId !== undefined) updateData.userId = passwordData.userId;
 
       // Si se proporciona una nueva contraseña, cifrarla
       if (passwordData.password !== undefined) {
@@ -320,7 +347,7 @@ export class PasswordManagerService {
     try {
       const passwords = await this.passwordManagerRepository.find({
         where: { category },
-        select: ['id', 'title', 'description', 'username', 'url', 'category', 'notes', 'createdAt', 'updateAt']
+        select: ['id', 'title', 'description', 'username', 'url', 'category', 'notes', 'createdAt', 'updateAt', 'userId']
       });
 
       response.error = false;
@@ -331,6 +358,45 @@ export class PasswordManagerService {
     } catch (error) {
       response.error = true;
       response.message = 'Error en la consulta.';
+      response.response = error;
+      response.status = 502;
+    }
+
+    return response;
+  }
+
+  async findByUserId(userId: number): Promise<ResponseDTO> {
+    let response: ResponseDTO = {
+      error: true,
+      message: 'Error en el servicio',
+      response: [],
+      status: 422
+    };
+
+    try {
+      // Validar que el usuario existe usando el cliente HTTP con Retry y Circuit Breaker
+      const userExists = await this.userClientService.userExists(userId);
+      if (!userExists) {
+        response.error = true;
+        response.message = `El usuario con ID ${userId} no existe.`;
+        response.response = [];
+        response.status = 404;
+        return response;
+      }
+
+      const passwords = await this.passwordManagerRepository.find({
+        where: { userId },
+        select: ['id', 'title', 'description', 'username', 'url', 'category', 'notes', 'createdAt', 'updateAt', 'userId']
+      });
+
+      response.error = false;
+      response.message = 'Consulta realizada correctamente.';
+      response.response = passwords;
+      response.status = 200;
+
+    } catch (error: any) {
+      response.error = true;
+      response.message = error.message || 'Error en la consulta.';
       response.response = error;
       response.status = 502;
     }

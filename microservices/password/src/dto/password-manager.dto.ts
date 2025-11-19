@@ -7,6 +7,7 @@ import {
   MinLength,
   IsOptional,
   IsUrl,
+  IsNumber,
 } from 'class-validator';
 
 export class CreatePasswordManagerDto {
@@ -96,6 +97,16 @@ export class CreatePasswordManagerDto {
     required: true,
   })
   masterKey: string;
+
+  @Expose()
+  @IsNumber({}, { message: 'El campo "userId" debe ser un número válido.' })
+  @IsNotEmpty({ message: 'El campo "userId" es obligatorio.' })
+  @ApiProperty({
+    description: 'ID del usuario propietario de la contraseña',
+    example: 1,
+    required: true,
+  })
+  userId: number;
 }
 
 export class UpdatePasswordManagerDto {
@@ -185,6 +196,16 @@ export class UpdatePasswordManagerDto {
     required: true,
   })
   masterKey: string;
+
+  @Expose()
+  @IsNumber({}, { message: 'El campo "userId" debe ser un número válido.' })
+  @IsOptional()
+  @ApiProperty({
+    description: 'ID del usuario propietario de la contraseña',
+    example: 1,
+    required: false,
+  })
+  userId?: number;
 }
 
 export class DecryptPasswordDto {

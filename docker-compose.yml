@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # Microservicio Users - Réplica 1
+  users-service-1:
+    build:
+      context: ./microservices/users
+      dockerfile: Dockerfile
+    container_name: users-service-1
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - ENV_ENTORNO=prod
+      - ENV_SYNCHRONIZE=true
+      - ENV_SWAGGER_SHOW=false
+      - DATABASE_PATH=/app/data/users.sqlite
+    volumes:
+      - users-db-1:/app/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/users', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Microservicio Users - Réplica 2
+  users-service-2:
+    build:
+      context: ./microservices/users
+      dockerfile: Dockerfile
+    container_name: users-service-2
+    ports:
+      - "3002:3001"
+    environment:
+      - PORT=3001
+      - ENV_ENTORNO=prod
+      - ENV_SYNCHRONIZE=true
+      - ENV_SWAGGER_SHOW=false
+      - DATABASE_PATH=/app/data/users.sqlite
+    volumes:
+      - users-db-2:/app/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/users', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Load Balancer NGINX para Users
+  users-service-lb:
+    build:
+      context: ./infra/users-lb
+      dockerfile: Dockerfile
+    container_name: users-service-lb
+    ports:
+      - "8080:80"
+    depends_on:
+      - users-service-1
+      - users-service-2
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Microservicio Password
+  password-service:
+    build:
+      context: ./microservices/password
+      dockerfile: Dockerfile
+    container_name: password-service
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ENV_ENTORNO=prod
+      - ENV_SYNCHRONIZE=true
+      - ENV_SWAGGER_SHOW=false
+      - USER_SERVICE_BASE_URL=http://users-service-lb
+      - DATABASE_PATH=/app/data/password.sqlite
+    volumes:
+      - password-db:/app/data
+    depends_on:
+      - users-service-lb
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/password-manager', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - password-service
+      - users-service-lb
+    networks:
+      - microservices-network
+
+networks:
+  microservices-network:
+    driver: bridge
+
+volumes:
+  users-db-1:
+    driver: local
+  users-db-2:
+    driver: local
+  password-db:
+    driver: local
+

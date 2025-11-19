@@ -10,8 +10,8 @@ WORKDIR /app
 # Copiar archivos de dependencias
 COPY package*.json ./
 
-# Instalar dependencias (usar --legacy-peer-deps para resolver conflictos de versiones)
-RUN npm install --legacy-peer-deps
+# Instalar dependencias
+RUN npm install
 
 # Copiar código fuente
 COPY . .
@@ -35,8 +35,8 @@ WORKDIR /app
 # Copiar archivos de dependencias
 COPY package*.json ./
 
-# Instalar solo dependencias de producción (usar --legacy-peer-deps para resolver conflictos)
-RUN npm install --production --legacy-peer-deps && npm cache clean --force
+# Instalar solo dependencias de producción
+RUN npm install --production && npm cache clean --force
 
 # Copiar archivos construidos desde la etapa base
 COPY --from=base /app/dist ./dist
@@ -49,11 +49,12 @@ RUN mkdir -p /app/data && chown -R nestjs:nodejs /app
 USER nestjs
 
 # Exponer el puerto
-EXPOSE 3000
+EXPOSE 3001
 
 # Variables de entorno por defecto
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3001
 
 # Comando para iniciar la aplicación
 CMD ["node", "dist/main.js"]
+

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microservicios - Práctica #1</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .services {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .service-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+        }
+        .service-card h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .service-card p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .endpoint {
+            background: #e9ecef;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 5px 0;
+            word-break: break-all;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .status.running {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.checking {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .info h3 {
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+        .info ul {
+            margin-left: 20px;
+            color: #555;
+        }
+        .info li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Sistema de Microservicios</h1>
+        <p class="subtitle">Práctica #1 - Implementación de Microservicios</p>
+        
+        <div class="services">
+            <div class="service-card">
+                <h2>👥 Microservicio Users</h2>
+                <p>Gestión de usuarios del sistema</p>
+                <div class="endpoint">http://users-service-lb/api/users</div>
+                <div class="endpoint">http://users-service-1:3001/api/users</div>
+                <div class="endpoint">http://users-service-2:3001/api/users</div>
+                <div id="users-status" class="status checking">Verificando...</div>
+            </div>
+            
+            <div class="service-card">
+                <h2>🔐 Microservicio Password</h2>
+                <p>Gestión de contraseñas cifradas</p>
+                <div class="endpoint">http://password-service:3000/api/password-manager</div>
+                <div id="password-status" class="status checking">Verificando...</div>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h3>📋 Características Implementadas</h3>
+            <ul>
+                <li><strong>Separación por Dominio:</strong> Users y Password como microservicios independientes</li>
+                <li><strong>Comunicación Síncrona:</strong> HTTP entre microservicios</li>
+                <li><strong>Patrón Retry:</strong> Reintentos automáticos en llamadas HTTP (2 reintentos, timeout 2s)</li>
+                <li><strong>Circuit Breaker:</strong> Protección contra fallos en cascada (umbral: 5 fallos, cooldown: 15s)</li>
+                <li><strong>Load Balancer:</strong> NGINX distribuyendo carga entre 2 réplicas de users-service</li>
+                <li><strong>Bases de Datos Independientes:</strong> SQLite separado por microservicio</li>
+                <li><strong>Docker Compose:</strong> Orquestación completa del sistema</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Verificar estado de los servicios
+        async function checkService(url, statusElement, serviceName) {
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (response.ok) {
+                    statusElement.textContent = '✅ En línea';
+                    statusElement.className = 'status running';
+                } else {
+                    statusElement.textContent = '⚠️ Error ' + response.status;
+                    statusElement.className = 'status error';
+                }
+            } catch (error) {
+                statusElement.textContent = '❌ No disponible';
+                statusElement.className = 'status error';
+            }
+        }
+        
+        // Verificar servicios (desde el navegador, solo si están accesibles)
+        // Nota: En producción, estos servicios estarían detrás de un proxy
+        // Por ahora solo mostramos la información
+        
+        // Simular verificación después de un delay
+        setTimeout(() => {
+            document.getElementById('users-status').textContent = 'ℹ️ Verificar desde el backend';
+            document.getElementById('users-status').className = 'status checking';
+            document.getElementById('password-status').textContent = 'ℹ️ Verificar desde el backend';
+            document.getElementById('password-status').className = 'status checking';
+        }, 1000);
+    </script>
+</body>
+</html>
+
