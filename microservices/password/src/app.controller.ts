@@ -8,19 +8,19 @@ import { ResponseDTO } from './dto/response.dto';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get('/')
-  @ApiOperation({
-    summary: 'Permite verificar si el servicio está funcionando.',
-  })
-  getPing(): ResponseDTO {
-    return this.appService.getPing();
-  }
-
   @Get('health')
   @ApiOperation({
     summary: 'Health check endpoint',
   })
   getHealth(): { status: string; service: string } {
     return { status: 'ok', service: 'password-service' };
+  }
+
+  @Get('/')
+  @ApiOperation({
+    summary: 'Permite verificar si el servicio está funcionando.',
+  })
+  getPing(): ResponseDTO {
+    return this.appService.getPing();
   }
 }
