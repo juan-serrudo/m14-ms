@@ -21,7 +21,7 @@
 @client_id_password = password-service
 @client_secret_password = password-service-secret-12345
 
-@access_token =
+@access_token = eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJ5WEhDZ1g5RUNtRlZ3VmctZWo0UDVvbmliaWRmZ0N4d3RIQUNQRjlXVGVBIn0.eyJleHAiOjE3NjM1OTgzMDYsImlhdCI6MTc2MzU5ODAwNiwianRpIjoiOTI3MjQ5ZWYtNDliZC00ZjE3LTllYzktYTZkZDIwMzg4NDM1IiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDkwL3JlYWxtcy9taWNyb3NlcnZpY2VzLXJlYWxtIiwic3ViIjoiODIxNmExY2UtMWE3Ni00OGZkLWJjZjMtMWFmOWQ1ZmI0Yzk4IiwidHlwIjoiQmVhcmVyIiwiYXpwIjoicGFzc3dvcmQtc2VydmljZSIsInNjb3BlIjoiIiwiY2xpZW50SG9zdCI6IjE3Mi4yMy4wLjEiLCJjbGllbnRBZGRyZXNzIjoiMTcyLjIzLjAuMSIsImNsaWVudF9pZCI6InBhc3N3b3JkLXNlcnZpY2UifQ.yw74Lgugup4xJGiMHaNT0cJBCnupH2NwCjDnCUTR7biEtmWpCfQHCa04SfITtZQmzsHY-wAzWiD-nBtgl6mEZLID8fJaeTgbwMex0nwTbFahysiWCECpstwCWzDkUwdP2Ol9c4Ebx-FyomIpYoArjRKOqeoq04d6YZBNf6epqqXjrFKuYj4RkZPL2qy2eIXIfpZteN7auUIW3WNArIW-8BAIrXS2Y3bhjtJeF1tDGdSjVFis7ztVi5G7v1kQ2Kh8HdYDzBVBgijy6fJJvnWBNi6zeItnm43rfegtXk4XiKCLEtvz40JtArhfSDDD--kB4z8rXFomfF_bm233HI9SUg
 
 ### ============================================
 ### 1. INFRAESTRUCTURA
@@ -59,7 +59,7 @@ Content-Type: application/json
 Authorization: Bearer {{access_token}}
 
 {
-  "email": "demo@example.com",
+  "email": "demo1@example.com",
   "name": "Usuario Demo",
   "status": "active"
 }
@@ -126,6 +126,48 @@ Content-Type: application/json
 ### 3.5. RESILIENCIA: Verificar que el servicio responde correctamente después de validación
 GET {{password_service_url}}/api/password-manager
 
+### 3.6. BAJO ACOPLAMIENTO: Comunicación asíncrona mediante Kafka (Event-Driven Architecture)
+GET {{password_service_url}}/api/user-cache/stats
+Accept: application/json
+
+### 3.7. KAFKA EVENT: Crear usuario y verificar propagación asíncrona
+POST {{users_service_url}}/api/users
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "email": "kafka-demo@example.com",
+  "name": "Usuario Kafka Demo",
+  "status": "active"
+}
+
+### 3.8. KAFKA EVENT: Verificar eventual consistency - Cache local actualizado
+GET {{password_service_url}}/api/user-cache/stats
+Accept: application/json
+
+### 3.9. KAFKA EVENT: Ver usuarios en cache local (actualizado por eventos de Kafka)
+GET {{password_service_url}}/api/user-cache/users
+Accept: application/json
+
+### 3.10. KAFKA EVENT: Actualizar usuario y verificar propagación
+PUT {{users_service_url}}/api/users/1
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Usuario Actualizado",
+  "status": "inactive"
+}
+
+### 3.11. KAFKA EVENT: Verificar que el cache se actualizó con el evento USER_UPDATED
+GET {{password_service_url}}/api/user-cache/users
+Accept: application/json
+
+### 3.12. VENTAJA KAFKA: Desacoplamiento temporal - Servicios no se bloquean
+### Los servicios comunican eventos de forma asíncrona sin dependencias directas
+GET {{password_service_url}}/api/user-cache/stats
+Accept: application/json
+
 ### ============================================
 ### 4: MECANISMO DE AUTENTICACIÓN SERVICIO A SERVICIO
 ### ============================================
@@ -140,24 +182,13 @@ Content-Type: application/x-www-form-urlencoded
 
 grant_type=client_credentials&client_id={{client_id_password}}&client_secret={{client_secret_password}}
 
-> {%
-    // Guardar el token en la variable para uso posterior
-    if (response.status === 200) {
-        client.global.set("access_token", response.body.access_token);
-        client.log("✅ Token obtenido para password-service");
-        client.log("⏱️  Expira en: " + response.body.expires_in + " segundos");
-    } else {
-        client.log("❌ Error al obtener token: " + response.status);
-        client.log("Respuesta: " + JSON.stringify(response.body));
-    }
-%}
 
 ### 4.3. CON AUTENTICACIÓN: Acceder a Users Service con token válido (debe funcionar)
 GET {{users_service_url}}/api/users
 Authorization: Bearer {{access_token}}
 ### Esperado: 200 OK - Demuestra validación exitosa de JWT
 
-### 4.4. FLUJO COMPLETO: password-service → users-service con autenticación automática
+### 4.4. FLUJO COMPLETO: password-service, users-service con autenticación automática
 ### password-service obtiene token internamente y lo incluye en la llamada
 POST {{password_service_url}}/api/password-manager
 Content-Type: application/json
